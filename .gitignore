@@ -1,0 +1,24 @@
+# Visual Studio
+.vs/
+x64/
+Win32/
+Debug/
+Release/
+*.user
+*.suo
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+
+# vcpkg
+vcpkg_installed/
+
+# Rider / JetBrains
+.idea/
+
+# Misc
+*.log
