@@ -1,4 +1,5 @@
 #include "Types.h"
+#include "ThreadManager.h"
 #include "Network/GameSession.h"
 #include "Network/Room.h"
 #include <spdlog/spdlog.h>
@@ -30,22 +31,10 @@ int main(int argc, char* argv[])
 
 		asio::co_spawn(Context, DoAccept(Acceptor, ChatRoom), asio::detached);
 
-		// 멀티스레드: 코어 수만큼 워커 스레드 생성
 		int32 iThreadCount = std::thread::hardware_concurrency();
-		Vector<std::thread> Threads;
-
-		for (int32 i = 0; i < iThreadCount - 1; ++i)
-		{
-			Threads.emplace_back([&Context]() { Context.run(); });
-		}
-
-		spdlog::info("Worker threads: {}", iThreadCount);
-		Context.run();
-
-		for (auto& Thread : Threads)
-		{
-			Thread.join();
-		}
+		ThreadManager Manager(Context, iThreadCount);
+		Manager.Start();
+		Manager.Join();
 	}
 	catch (std::exception& Exception)
 	{

@@ -167,6 +167,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <CustomBuildStep>
+      <Command>call "$(SolutionDir)GenPackets.bat"</Command>
+      <Inputs>$(SolutionDir)Proto\Protocol.proto</Inputs>
+      <Outputs>$(ProjectDir)Protocol.pb.h;$(ProjectDir)ServerPacketHandler.h</Outputs>
+      <Message>Generating packet code from Protocol.proto...</Message>
+    </CustomBuildStep>
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="Client.cpp" />
   </ItemGroup>
   <ItemGroup>
