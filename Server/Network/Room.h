@@ -1,22 +1,25 @@
 #pragma once
 
 #include "Types.h"
+#include "JobQueue.h"
 
 class GameSession;
 
-// 채팅 방. Strand로 동시성을 보호하며, 소속 세션에 메시지를 브로드캐스트한다.
-class Room
+// 채팅 방. JobQueue를 상속받아 내부 로직을 직렬화한다.
+class Room : public JobQueue
 {
 public:
-	explicit Room(IoContext& Context);
+	Room(uint32 RoomId, const WString& Title);
 
 	void Enter(SharedPtr<GameSession> SessionPtr);
 	void Leave(SharedPtr<GameSession> SessionPtr);
 	void Broadcast(const String& Message, SharedPtr<GameSession> Sender);
 
-	asio::strand<IoContext::executor_type>& GetStrand();
+	uint32 GetRoomId() const { return RoomId; }
+	const WString& GetTitle() const { return Title; }
 
 private:
-	asio::strand<IoContext::executor_type> Strand;
+	uint32 RoomId = 0;
+	WString Title;
 	Set<SharedPtr<GameSession>> Sessions;
 };

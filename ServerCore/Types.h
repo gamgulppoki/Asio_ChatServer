@@ -98,3 +98,6 @@ using ErrorCode = std::error_code;
 // shared_ptr 매크로
 // =============================================
 #define USING_SHARED_PTR(name) using name##Ref = std::shared_ptr<class name>;
+
+// 타입 정의 이후에 include (CoreMacro가 uint32 등을 사용하므로)
+#include "CoreMacro.h"

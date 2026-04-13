@@ -8,7 +8,9 @@ class Room;
 class GameSession : public Session
 {
 public:
-	GameSession(TcpSocket Socket, Room& RoomRef);
+	GameSession(TcpSocket Socket);
+
+	void SetRoom(SharedPtr<Room> RoomPtr);
 
 protected:
 	void OnConnected() override;
@@ -16,5 +18,5 @@ protected:
 	void OnDisconnected() override;
 
 private:
-	Room& RoomRef;
+	SharedPtr<Room> CurrentRoom;
 };

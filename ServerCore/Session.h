@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Types.h"
+#include "PlayerInfo.h"
 
 // 기본 세션. 소켓의 비동기 read/write를 코루틴으로 처리한다.
 // 서버/클라이언트에서 상속받아 OnConnected, OnReceived, OnDisconnected를 구현한다.
@@ -26,4 +27,8 @@ private:
 	TcpSocket Socket;
 	Deque<String> WriteQueue;
 	bool bIsWriting = false;
+
+protected:
+	PlayerInfo Info;
+	SessionState State = SessionState::Connected;
 };

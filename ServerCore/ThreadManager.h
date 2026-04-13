@@ -13,6 +13,8 @@ public:
 	void Join();
 
 private:
+	void DoWorkerLoop();
+
 	IoContext& Context;
 	int32 iThreadCount;
 	Vector<std::thread> Threads;

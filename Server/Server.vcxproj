@@ -166,22 +166,24 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
+  <ItemDefinitionGroup>
     <CustomBuildStep>
       <Command>call "$(SolutionDir)GenPackets.bat"</Command>
       <Inputs>$(SolutionDir)Proto\Protocol.proto</Inputs>
       <Outputs>$(ProjectDir)Network\Protocol.pb.h;$(ProjectDir)Network\ClientPacketHandler.h</Outputs>
       <Message>Generating packet code from Protocol.proto...</Message>
     </CustomBuildStep>
-  </ItemGroup>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Network\GameSession.h" />
     <ClInclude Include="Network\Room.h" />
+    <ClInclude Include="Network\RoomManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Server.cpp" />
     <ClCompile Include="Network\GameSession.cpp" />
     <ClCompile Include="Network\Room.cpp" />
+    <ClCompile Include="Network\RoomManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ServerCore\ServerCore.vcxproj">

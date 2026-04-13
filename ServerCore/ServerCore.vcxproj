@@ -116,6 +116,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
@@ -155,6 +156,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
@@ -166,13 +168,30 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Types.h" />
+    <ClInclude Include="CoreMacro.h" />
+    <ClInclude Include="CoreTLS.h" />
+    <ClInclude Include="CoreGlobal.h" />
+    <ClInclude Include="GlobalQueue.h" />
+    <ClInclude Include="Job.h" />
+    <ClInclude Include="JobQueue.h" />
+    <ClInclude Include="Lock.h" />
+    <ClInclude Include="PlayerInfo.h" />
     <ClInclude Include="Session.h" />
     <ClInclude Include="ThreadManager.h" />
+    <ClInclude Include="Packet\SendBuffer.h" />
+    <ClInclude Include="Packet\RecvBuffer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ServerCore.cpp" />
+    <ClCompile Include="CoreTLS.cpp" />
+    <ClCompile Include="CoreGlobal.cpp" />
+    <ClCompile Include="GlobalQueue.cpp" />
+    <ClCompile Include="JobQueue.cpp" />
+    <ClCompile Include="Lock.cpp" />
     <ClCompile Include="Session.cpp" />
     <ClCompile Include="ThreadManager.cpp" />
+    <ClCompile Include="Packet\SendBuffer.cpp" />
+    <ClCompile Include="Packet\RecvBuffer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
