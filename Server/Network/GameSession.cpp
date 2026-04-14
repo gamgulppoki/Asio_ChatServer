@@ -1,6 +1,11 @@
 #include "GameSession.h"
 #include "Room.h"
+#include "ClientPacketHandler.h"
+#include "Packet/PacketHeader.h"
 #include <spdlog/spdlog.h>
+#include <atomic>
+
+static std::atomic<uint64> SPlayerIdGenerator = 1;
 
 GameSession::GameSession(TcpSocket Socket)
 	: Session(std::move(Socket))
@@ -13,25 +18,34 @@ void GameSession::SetRoom(SharedPtr<Room> RoomPtr)
 	CurrentRoom = RoomPtr;
 }
 
-// 접속 시 호출. 아직 로그인 전이므로 방 입장은 하지 않는다.
+// 접속 시 호출. 임시 PlayerId를 부여한다. (로그인 구현 후 DB 기반으로 교체 예정)
 void GameSession::OnConnected()
 {
-	spdlog::info("Client connected");
+	Info.PlayerId = SPlayerIdGenerator.fetch_add(1);
+	spdlog::info("Client connected - PlayerId: {}", Info.PlayerId);
 }
 
-// 메시지 수신 시 처리. 현재는 방에 있으면 브로드캐스트.
-void GameSession::OnReceived(const String& Message)
+// 수신 데이터에서 완성된 패킷을 꺼내 처리한다. 처리한 바이트 수를 반환.
+int32 GameSession::OnReceived(BYTE* Buffer, int32 iLen)
 {
-	spdlog::info("Received: {}", Message);
+	int32 iProcessLen = 0;
 
-	if (CurrentRoom)
+	while (iLen >= sizeof(PacketHeader))
 	{
-		auto Self = std::static_pointer_cast<GameSession>(shared_from_this());
-		CurrentRoom->Push([Room = CurrentRoom, Self, Message]()
-		{
-			Room->Broadcast(Message, Self);
-		});
+		PacketHeader* Header = reinterpret_cast<PacketHeader*>(Buffer);
+
+		if (iLen < Header->iSize)
+			break;
+
+		ClientPacketHandler::HandlePacket(
+			std::static_pointer_cast<Session>(shared_from_this()), Buffer, Header->iSize);
+
+		Buffer += Header->iSize;
+		iLen -= Header->iSize;
+		iProcessLen += Header->iSize;
 	}
+
+	return iProcessLen;
 }
 
 // 연결 종료 시 방에서 퇴장한다.

@@ -2,7 +2,7 @@
 pushd %~dp0
 
 REM ============================================
-REM protoc 경로 (vcpkg 설치 후 실제 경로로 수정 필요)
+REM Paths
 REM ============================================
 SET PROTOC=vcpkg_installed\x64-windows-static\x64-windows-static\tools\protobuf\protoc.exe
 SET PROTO_DIR=Proto
@@ -30,7 +30,7 @@ IF ERRORLEVEL 1 (
 popd
 
 REM ============================================
-REM 3. 생성 파일 복사
+REM 3. Copy generated files
 REM ============================================
 XCOPY /Y %PROTO_DIR%\Protocol.pb.h Server\Network\ >NUL
 XCOPY /Y %PROTO_DIR%\Protocol.pb.cc Server\Network\ >NUL
@@ -41,7 +41,7 @@ XCOPY /Y %PROTO_DIR%\Protocol.pb.cc Client\ >NUL
 XCOPY /Y %GEN_DIR%\ServerPacketHandler.h Client\ >NUL
 
 REM ============================================
-REM 4. 중간 생성물 정리
+REM 4. Cleanup intermediate files
 REM ============================================
 DEL /Q /F %PROTO_DIR%\*.pb.h >NUL 2>&1
 DEL /Q /F %PROTO_DIR%\*.pb.cc >NUL 2>&1

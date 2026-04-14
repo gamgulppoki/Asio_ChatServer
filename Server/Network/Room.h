@@ -2,6 +2,7 @@
 
 #include "Types.h"
 #include "JobQueue.h"
+#include "Packet/SendBuffer.h"
 
 class GameSession;
 
@@ -13,7 +14,7 @@ public:
 
 	void Enter(SharedPtr<GameSession> SessionPtr);
 	void Leave(SharedPtr<GameSession> SessionPtr);
-	void Broadcast(const String& Message, SharedPtr<GameSession> Sender);
+	void Broadcast(SendBufferRef Buffer, SharedPtr<GameSession> Sender);
 
 	uint32 GetRoomId() const { return RoomId; }
 	const WString& GetTitle() const { return Title; }
@@ -21,5 +22,5 @@ public:
 private:
 	uint32 RoomId = 0;
 	WString Title;
-	Set<SharedPtr<GameSession>> Sessions;
+	HashMap<uint64, SharedPtr<GameSession>> Sessions;
 };

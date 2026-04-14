@@ -1,16 +1,16 @@
 #include "Types.h"
 #include "ThreadManager.h"
 #include "CoreGlobal.h"
+#include "ServerGlobal.h"
 #include "GlobalQueue.h"
 #include "Packet/SendBuffer.h"
 #include "Network/GameSession.h"
 #include "Network/RoomManager.h"
+#include "Network/ClientPacketHandler.h"
 #include <spdlog/spdlog.h>
 #include <thread>
 
 const int32 iPort = 9000;
-
-RoomManager GRoomManager;
 
 // 클라이언트 접속을 코루틴으로 대기하고, 접속마다 GameSession을 생성한다.
 asio::awaitable<void> DoAccept(TcpAcceptor& Acceptor)
@@ -35,6 +35,15 @@ int main(int argc, char* argv[])
 		SendBufferManager SendBufferManagerInstance;
 		GSendBufferManager = &SendBufferManagerInstance;
 
+		RoomManager RoomManagerInstance;
+		GRoomManager = &RoomManagerInstance;
+
+		ClientPacketHandler::Init();
+
+		GRoomManager->CreateRoom(L"Room 1");
+		GRoomManager->CreateRoom(L"Room 2");
+		GRoomManager->CreateRoom(L"Room 3");
+
 		IoContext Context;
 		TcpAcceptor Acceptor(Context, TcpEndpoint(asio::ip::tcp::v4(), iPort));
 
@@ -48,6 +57,12 @@ int main(int argc, char* argv[])
 
 		Manager.Start();
 		Manager.Join();
+
+		// 전역 싱글톤 정리 (초기화 역순)
+		GThreadManager = nullptr;
+		GRoomManager = nullptr;
+		GSendBufferManager = nullptr;
+		GGlobalQueue = nullptr;
 	}
 	catch (std::exception& Exception)
 	{

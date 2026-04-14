@@ -174,16 +174,22 @@
       <Message>Generating packet code from Protocol.proto...</Message>
     </CustomBuildStep>
   </ItemDefinitionGroup>
-  <ItemGroup>
+  <ItemGroup><ClInclude Include="ServerGlobal.h" />
     <ClInclude Include="Network\GameSession.h" />
     <ClInclude Include="Network\Room.h" />
     <ClInclude Include="Network\RoomManager.h" />
+    <ClInclude Include="Network\ClientPacketHandler.h" />
+    <ClInclude Include="Network\Protocol.pb.h" />
+    <None Include="..\Proto\Protocol.proto" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Server.cpp" />
+    <ClCompile Include="ServerGlobal.cpp" />
     <ClCompile Include="Network\GameSession.cpp" />
     <ClCompile Include="Network\Room.cpp" />
     <ClCompile Include="Network\RoomManager.cpp" />
+    <ClCompile Include="Network\ClientPacketHandler.cpp" />
+    <ClCompile Include="Network\Protocol.pb.cc" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ServerCore\ServerCore.vcxproj">

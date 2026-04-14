@@ -1,6 +1,17 @@
 syntax = "proto3";
 package Protocol;
 
+message C_ENTER_ROOM
+{
+	uint32 roomId = 1;
+}
+
+message S_ENTER_ROOM
+{
+	bool success = 1;
+	uint32 roomId = 2;
+}
+
 message C_CHAT
 {
 	string msg = 1;

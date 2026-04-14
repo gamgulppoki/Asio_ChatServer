@@ -180,6 +180,7 @@
     <ClInclude Include="ThreadManager.h" />
     <ClInclude Include="Packet\SendBuffer.h" />
     <ClInclude Include="Packet\RecvBuffer.h" />
+    <ClInclude Include="Packet\PacketHeader.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ServerCore.cpp" />

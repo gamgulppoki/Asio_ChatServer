@@ -166,16 +166,23 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
+  <ItemDefinitionGroup>
     <CustomBuildStep>
       <Command>call "$(SolutionDir)GenPackets.bat"</Command>
       <Inputs>$(SolutionDir)Proto\Protocol.proto</Inputs>
       <Outputs>$(ProjectDir)Protocol.pb.h;$(ProjectDir)ServerPacketHandler.h</Outputs>
       <Message>Generating packet code from Protocol.proto...</Message>
     </CustomBuildStep>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="ServerPacketHandler.h" />
+    <ClInclude Include="Protocol.pb.h" />
+    <None Include="..\Proto\Protocol.proto" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Client.cpp" />
+    <ClCompile Include="ServerPacketHandler.cpp" />
+    <ClCompile Include="Protocol.pb.cc" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ServerCore\ServerCore.vcxproj">

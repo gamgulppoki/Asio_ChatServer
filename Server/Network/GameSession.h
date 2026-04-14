@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Session.h"
+#include "PlayerInfo.h"
 
 class Room;
 
@@ -11,12 +12,17 @@ public:
 	GameSession(TcpSocket Socket);
 
 	void SetRoom(SharedPtr<Room> RoomPtr);
+	SharedPtr<Room> GetRoom() const { return CurrentRoom; }
+
+	PlayerInfo& GetPlayerInfo() { return Info; }
+	uint64 GetPlayerId() const { return Info.PlayerId; }
 
 protected:
 	void OnConnected() override;
-	void OnReceived(const String& Message) override;
+	int32 OnReceived(BYTE* Buffer, int32 iLen) override;
 	void OnDisconnected() override;
 
 private:
 	SharedPtr<Room> CurrentRoom;
+	PlayerInfo Info;
 };

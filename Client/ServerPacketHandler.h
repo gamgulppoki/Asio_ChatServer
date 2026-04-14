@@ -12,30 +12,33 @@ extern PacketHandlerFunc GPacketHandler[UINT16_MAX];
 
 enum : uint16
 {
-{%- for pkt in parser.total_pkt %}
-	PKT_{{ pkt.name }} = {{ pkt.id }},
-{%- endfor %}
+	PKT_C_ENTER_ROOM = 1000,
+	PKT_S_ENTER_ROOM = 1001,
+	PKT_C_CHAT = 1002,
+	PKT_S_CHAT = 1003,
 };
 
 // Forward declarations
 bool Handle_INVALID(SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen);
-{%- for pkt in parser.recv_pkt %}
-bool Handle_{{ pkt.name }}(SharedPtr<Session> SessionPtr, Protocol::{{ pkt.name }}& Pkt);
-{%- endfor %}
+bool Handle_S_ENTER_ROOM(SharedPtr<Session> SessionPtr, Protocol::S_ENTER_ROOM& Pkt);
+bool Handle_S_CHAT(SharedPtr<Session> SessionPtr, Protocol::S_CHAT& Pkt);
 
-class {{ output }}
+class ServerPacketHandler
 {
 public:
 	static void Init()
 	{
 		for (int32 i = 0; i < UINT16_MAX; i++)
 			GPacketHandler[i] = Handle_INVALID;
-{% for pkt in parser.recv_pkt %}
-		GPacketHandler[PKT_{{ pkt.name }}] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+
+		GPacketHandler[PKT_S_ENTER_ROOM] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
 		{
-			return HandlePacket<Protocol::{{ pkt.name }}>(Handle_{{ pkt.name }}, SessionPtr, Buffer, iLen);
+			return HandlePacket<Protocol::S_ENTER_ROOM>(Handle_S_ENTER_ROOM, SessionPtr, Buffer, iLen);
 		};
-{%- endfor %}
+		GPacketHandler[PKT_S_CHAT] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::S_CHAT>(Handle_S_CHAT, SessionPtr, Buffer, iLen);
+		};
 	}
 
 	static bool HandlePacket(SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
@@ -43,9 +46,9 @@ public:
 		PacketHeader* Header = reinterpret_cast<PacketHeader*>(Buffer);
 		return GPacketHandler[Header->iId](SessionPtr, Buffer, iLen);
 	}
-{% for pkt in parser.send_pkt %}
-	static SendBufferRef MakeSendBuffer(Protocol::{{ pkt.name }}& Pkt) { return _MakeSendBuffer(Pkt, PKT_{{ pkt.name }}); }
-{%- endfor %}
+
+	static SendBufferRef MakeSendBuffer(Protocol::C_ENTER_ROOM& Pkt) { return _MakeSendBuffer(Pkt, PKT_C_ENTER_ROOM); }
+	static SendBufferRef MakeSendBuffer(Protocol::C_CHAT& Pkt) { return _MakeSendBuffer(Pkt, PKT_C_CHAT); }
 
 private:
 	template<typename PacketType, typename ProcessFunc>
