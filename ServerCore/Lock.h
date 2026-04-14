@@ -7,6 +7,7 @@
 // =============================================
 class RWSpinLock
 {
+	static constexpr uint32 ACQUIRE_TIMEOUT_TICK = 10000;
 	static constexpr uint32 MAX_SPIN_COUNT = 5000;
 
 	// 비트 레이아웃

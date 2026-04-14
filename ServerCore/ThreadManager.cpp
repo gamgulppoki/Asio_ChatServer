@@ -51,17 +51,23 @@ void ThreadManager::DoWorkerLoop()
 		LEndTickCount = ::GetTickCount64() + WORKER_TICK;
 
 		// 대기 중인 I/O 이벤트 처리
-		Context.poll();
+		size_t iPollCount = Context.poll();
 
 		// GlobalQueue에서 JobQueue를 꺼내서 실행
+		uint32 iJobProcessed = 0;
 		while (auto JobQueuePtr = GGlobalQueue->Pop())
 		{
 			JobQueuePtr->Execute();
+			iJobProcessed++;
 
 			// 시간 초과 시 나머지는 다음 턴에
 			if (::GetTickCount64() >= LEndTickCount)
 				break;
 		}
+
+		// 처리한 작업이 없으면 잠시 대기 (busy-loop 방지)
+		if (iPollCount == 0 && iJobProcessed == 0)
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 }
 

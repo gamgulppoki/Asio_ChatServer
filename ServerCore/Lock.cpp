@@ -2,19 +2,27 @@
 
 // =============================================
 // WriteLock: 아무도 읽지도 쓰지도 않을 때(0)만 진입
+// 스핀 실패 시 yield로 양보하고, 타임아웃 초과 시 크래시한다.
 // =============================================
 void RWSpinLock::WriteLock(const char* File, int32 Line)
 {
-	for (uint32 iSpinCount = 0; iSpinCount < MAX_SPIN_COUNT; iSpinCount++)
+	const int64 BeginTick = ::GetTickCount64();
+
+	while (true)
 	{
-		uint32 Expected = 0;
+		for (uint32 iSpinCount = 0; iSpinCount < MAX_SPIN_COUNT; iSpinCount++)
+		{
+			uint32 Expected = 0;
 
-		// LockState_가 0이면 WRITE_FLAG로 교체 (성공 시 진입)
-		if (LockState_.compare_exchange_strong(Expected, WRITE_FLAG))
-			return;
+			if (LockState_.compare_exchange_strong(Expected, WRITE_FLAG))
+				return;
+		}
+
+		if (::GetTickCount64() - BeginTick >= ACQUIRE_TIMEOUT_TICK)
+			CRASH("WRITE_LOCK_TIMEOUT");
+
+		std::this_thread::yield();
 	}
-
-	ASSERT_CRASH(false)
 }
 
 // =============================================
@@ -29,20 +37,27 @@ void RWSpinLock::WriteUnlock()
 
 // =============================================
 // ReadLock: Write 중이 아닐 때만 Read Count +1
+// 스핀 실패 시 yield로 양보하고, 타임아웃 초과 시 크래시한다.
 // =============================================
 void RWSpinLock::ReadLock(const char* File, int32 Line)
 {
-	for (uint32 iSpinCount = 0; iSpinCount < MAX_SPIN_COUNT; iSpinCount++)
+	const int64 BeginTick = ::GetTickCount64();
+
+	while (true)
 	{
-		// 현재 상태에서 Write Flag가 꺼져 있는 값을 기대
-		uint32 Expected = LockState_.load() & READ_MASK;
+		for (uint32 iSpinCount = 0; iSpinCount < MAX_SPIN_COUNT; iSpinCount++)
+		{
+			uint32 Expected = LockState_.load() & READ_MASK;
 
-		// Write 중이 아닌 상태에서 Read Count를 +1
-		if (LockState_.compare_exchange_strong(Expected, Expected + 1))
-			return;
+			if (LockState_.compare_exchange_strong(Expected, Expected + 1))
+				return;
+		}
+
+		if (::GetTickCount64() - BeginTick >= ACQUIRE_TIMEOUT_TICK)
+			CRASH("READ_LOCK_TIMEOUT");
+
+		std::this_thread::yield();
 	}
-
-	ASSERT_CRASH(false)
 }
 
 // =============================================

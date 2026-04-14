@@ -3,6 +3,7 @@
 #include "CoreGlobal.h"
 #include "Packet/PacketHeader.h"
 #include "Packet/SendBuffer.h"
+#include "StringUtils.h"
 #include "ServerPacketHandler.h"
 #include <spdlog/spdlog.h>
 #include <iostream>
@@ -94,7 +95,7 @@ int main(int argc, char* argv[])
 				continue;
 
 			Protocol::C_CHAT ChatPkt;
-			ChatPkt.set_msg(Input);
+			ChatPkt.set_msg(StringUtils::ToUtf8(Input));
 			SendBufferRef Buffer = ServerPacketHandler::MakeSendBuffer(ChatPkt);
 			MySession->Send(Buffer);
 		}
