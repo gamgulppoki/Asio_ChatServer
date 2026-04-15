@@ -1,5 +1,9 @@
 ﻿#include "DBConnection.h"
 #include <spdlog/spdlog.h>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
 
 DBConnection::DBConnection()
 {
@@ -65,6 +69,43 @@ bool DBConnection::Connect(const WCHAR* ConnectionString)
 	}
 
 	spdlog::info("[DBConnection] Connected to database");
+
+	if (!ApplySchema(L"DB/Schema"))
+		return false;
+
+	return true;
+}
+
+// SchemaDir 안의 모든 .sql 파일을 읽어 실행한다.
+// 현재 .sql은 ASCII만 가정(컬럼명/키워드). 한글 등 들어가면 UTF-8 디코딩 필요.
+bool DBConnection::ApplySchema(const WCHAR* SchemaDir)
+{
+	namespace fs = std::filesystem;
+
+	if (!fs::exists(SchemaDir))
+		return true;
+
+	for (auto& Entry : fs::directory_iterator(SchemaDir))
+	{
+		if (Entry.path().extension() != ".sql")
+			continue;
+
+		std::ifstream File(Entry.path());
+		std::stringstream Ss;
+		Ss << File.rdbuf();
+		std::string Utf8 = Ss.str();
+		std::wstring Wide(Utf8.begin(), Utf8.end());
+
+		if (!Execute(Wide.c_str()))
+		{
+			spdlog::error("[DBConnection] Schema apply failed: {}",
+				Entry.path().filename().string());
+			return false;
+		}
+
+		spdlog::info("[DBConnection] Applied schema: {}",
+			Entry.path().filename().string());
+	}
 	return true;
 }
 

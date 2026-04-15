@@ -28,6 +28,7 @@ public:
 
 private:
 	void HandleError(SQLHANDLE Handle, SQLSMALLINT Type);
+	bool ApplySchema(const WCHAR* SchemaDir);
 
 	static constexpr int32 MAX_COLUMNS = 32;
 

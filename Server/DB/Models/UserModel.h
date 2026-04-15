@@ -14,8 +14,8 @@ struct User
 inline DBModel<User> CreateUserModel(DBConnection& Conn)
 {
 	DBModel<User> Model(Conn, L"Users");
-	Model.AddColumn(L"Id",    &User::Id, true);
-	Model.AddColumn(L"Name",  &User::Name);
+	Model.AddColumn(L"Id", &User::Id, true);
+	Model.AddColumn(L"Name", &User::Name);
 	Model.AddColumn(L"Email", &User::Email);
 	return Model;
 }

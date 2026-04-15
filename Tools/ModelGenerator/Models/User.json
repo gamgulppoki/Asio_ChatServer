@@ -1,0 +1,9 @@
+{
+    "table": "Users",
+    "struct_name": "User",
+    "columns": [
+        { "name": "Id",    "type": "int32", "primary": true, "autoincrement": true },
+        { "name": "Name",  "type": "wchar", "size": 50 },
+        { "name": "Email", "type": "wchar", "size": 100 }
+    ]
+}

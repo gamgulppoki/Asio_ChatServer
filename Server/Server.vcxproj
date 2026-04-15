@@ -188,6 +188,8 @@
     <ClInclude Include="DB\Models\UserCols.h" />
     <ClInclude Include="DB\Models\UserModel.h" />
     <None Include="..\Proto\Protocol.proto" />
+    <None Include="..\Tools\ModelGenerator\Models\User.json" />
+    <None Include="DB\Schema\Users.sql" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Server.cpp" />
