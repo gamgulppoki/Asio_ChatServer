@@ -182,6 +182,11 @@
     <ClInclude Include="Network\RoomManager.h" />
     <ClInclude Include="Network\ClientPacketHandler.h" />
     <ClInclude Include="Network\Protocol.pb.h" />
+    <ClInclude Include="DB\Column.h" />
+    <ClInclude Include="DB\DBConnection.h" />
+    <ClInclude Include="DB\DBModel.h" />
+    <ClInclude Include="DB\Models\UserCols.h" />
+    <ClInclude Include="DB\Models\UserModel.h" />
     <None Include="..\Proto\Protocol.proto" />
   </ItemGroup>
   <ItemGroup>
@@ -194,6 +199,7 @@
     <ClCompile Include="Network\RoomManager.cpp" />
     <ClCompile Include="Network\ClientPacketHandler.cpp" />
     <ClCompile Include="Network\Protocol.pb.cc" />
+    <ClCompile Include="DB\DBConnection.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ServerCore\ServerCore.vcxproj">
