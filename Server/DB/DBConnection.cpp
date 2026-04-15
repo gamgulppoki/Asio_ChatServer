@@ -15,32 +15,18 @@ DBConnection::~DBConnection()
 	Disconnect();
 }
 
-// ODBC를 통해 DB에 연결한다.
+// ODBC 환경 핸들(Pool이 소유)을 받아 DB에 연결한다.
 // ConnectionString 예시: L"DRIVER={ODBC Driver 17 for SQL Server};SERVER=.\\SQLEXPRESS;DATABASE=WebzenDB;Trusted_Connection=Yes;"
-bool DBConnection::Connect(const WCHAR* ConnectionString)
+bool DBConnection::Connect(SQLHENV Env, const WCHAR* ConnectionString)
 {
-	// 1. 환경 핸들 생성
-	if (SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &Env) != SQL_SUCCESS)
-	{
-		spdlog::error("[DBConnection] Failed to allocate environment handle");
-		return false;
-	}
-
-	// 2. ODBC 버전 설정 (3.x)
-	if (SQLSetEnvAttr(Env, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)SQL_OV_ODBC3, 0) != SQL_SUCCESS)
-	{
-		spdlog::error("[DBConnection] Failed to set ODBC version");
-		return false;
-	}
-
-	// 3. 연결 핸들 생성
+	// 1. 연결 핸들 생성
 	if (SQLAllocHandle(SQL_HANDLE_DBC, Env, &Dbc) != SQL_SUCCESS)
 	{
 		spdlog::error("[DBConnection] Failed to allocate connection handle");
 		return false;
 	}
 
-	// 4. DB 접속
+	// 2. DB 접속
 	WCHAR OutConnectionString[1024] = {};
 	SQLSMALLINT OutConnectionStringLen = 0;
 
@@ -61,17 +47,12 @@ bool DBConnection::Connect(const WCHAR* ConnectionString)
 		return false;
 	}
 
-	// 5. 문장 핸들 생성
+	// 3. 문장 핸들 생성
 	if (SQLAllocHandle(SQL_HANDLE_STMT, Dbc, &Stmt) != SQL_SUCCESS)
 	{
 		spdlog::error("[DBConnection] Failed to allocate statement handle");
 		return false;
 	}
-
-	spdlog::info("[DBConnection] Connected to database");
-
-	if (!ApplySchema(L"DB/Schema"))
-		return false;
 
 	return true;
 }
@@ -123,12 +104,6 @@ void DBConnection::Disconnect()
 		SQLDisconnect(Dbc);
 		SQLFreeHandle(SQL_HANDLE_DBC, Dbc);
 		Dbc = SQL_NULL_HDBC;
-	}
-
-	if (Env != SQL_NULL_HENV)
-	{
-		SQLFreeHandle(SQL_HANDLE_ENV, Env);
-		Env = SQL_NULL_HENV;
 	}
 }
 

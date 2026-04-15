@@ -13,9 +13,10 @@ public:
 	DBConnection();
 	~DBConnection();
 
-	bool Connect(const WCHAR* ConnectionString);
+	bool Connect(SQLHENV Env, const WCHAR* ConnectionString);
 	void Disconnect();
 
+	bool ApplySchema(const WCHAR* SchemaDir);
 	bool Execute(const WCHAR* Query);
 	bool Fetch();
 	void BindCol(int32 iColumn, bool* OutValue);
@@ -28,11 +29,9 @@ public:
 
 private:
 	void HandleError(SQLHANDLE Handle, SQLSMALLINT Type);
-	bool ApplySchema(const WCHAR* SchemaDir);
 
 	static constexpr int32 MAX_COLUMNS = 32;
 
-	SQLHENV		Env = SQL_NULL_HENV;
 	SQLHDBC		Dbc = SQL_NULL_HDBC;
 	SQLHSTMT	Stmt = SQL_NULL_HSTMT;
 	Array<SQLLEN, MAX_COLUMNS>	Indicators = {};

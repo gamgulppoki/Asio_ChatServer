@@ -6,5 +6,6 @@
 // =============================================
 
 RoomManager* GRoomManager = nullptr;
+DBConnectionPool* GDBPool = nullptr;
 
 PacketHandlerFunc GPacketHandler[UINT16_MAX];

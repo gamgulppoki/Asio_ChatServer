@@ -4,6 +4,7 @@
 #include "GlobalQueue.h"
 #include "Packet/SendBuffer.h"
 #include "Network/RoomManager.h"
+#include "DB/DBConnectionPool.h"
 
 // 서버 애플리케이션 최상위 클래스.
 // 전역 싱글톤 생명주기를 관리하고, 서버 가동/종료 흐름을 캡슐화한다.
@@ -21,4 +22,5 @@ private:
 	GlobalQueue       GlobalQueueInstance_;
 	SendBufferManager SendBufferManagerInstance_;
 	RoomManager       RoomManagerInstance_;
+	DBConnectionPool  DBPoolInstance_;
 };

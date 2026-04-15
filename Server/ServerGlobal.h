@@ -6,6 +6,7 @@
 // =============================================
 
 extern class RoomManager* GRoomManager;
+extern class DBConnectionPool* GDBPool;
 
 #include "Network/ClientPacketHandler.h"
 extern PacketHandlerFunc GPacketHandler[UINT16_MAX];

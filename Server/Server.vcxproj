@@ -184,6 +184,7 @@
     <ClInclude Include="Network\Protocol.pb.h" />
     <ClInclude Include="DB\Column.h" />
     <ClInclude Include="DB\DBConnection.h" />
+    <ClInclude Include="DB\DBConnectionPool.h" />
     <ClInclude Include="DB\DBModel.h" />
     <ClInclude Include="DB\Models\UserCols.h" />
     <ClInclude Include="DB\Models\UserModel.h" />
@@ -202,6 +203,7 @@
     <ClCompile Include="Network\ClientPacketHandler.cpp" />
     <ClCompile Include="Network\Protocol.pb.cc" />
     <ClCompile Include="DB\DBConnection.cpp" />
+    <ClCompile Include="DB\DBConnectionPool.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ServerCore\ServerCore.vcxproj">
