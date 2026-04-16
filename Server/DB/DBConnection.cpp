@@ -33,7 +33,7 @@ bool DBConnection::Connect(SQLHENV Env, const WCHAR* ConnectionString)
 	SQLRETURN Ret = SQLDriverConnectW(
 		Dbc,
 		NULL,
-		(SQLWCHAR*)ConnectionString,
+		const_cast<SQLWCHAR*>(ConnectionString),
 		SQL_NTS,
 		OutConnectionString,
 		1024,
@@ -44,6 +44,7 @@ bool DBConnection::Connect(SQLHENV Env, const WCHAR* ConnectionString)
 	if (Ret != SQL_SUCCESS && Ret != SQL_SUCCESS_WITH_INFO)
 	{
 		HandleError(Dbc, SQL_HANDLE_DBC);
+		Disconnect();
 		return false;
 	}
 
@@ -51,6 +52,7 @@ bool DBConnection::Connect(SQLHENV Env, const WCHAR* ConnectionString)
 	if (SQLAllocHandle(SQL_HANDLE_STMT, Dbc, &Stmt) != SQL_SUCCESS)
 	{
 		spdlog::error("[DBConnection] Failed to allocate statement handle");
+		Disconnect();
 		return false;
 	}
 
@@ -110,11 +112,14 @@ void DBConnection::Disconnect()
 // SQL 쿼리를 실행한다. SELECT가 아닌 INSERT/UPDATE/DELETE에 적합하다.
 bool DBConnection::Execute(const WCHAR* Query)
 {
-	// 이전 실행 결과 정리
+	// 이전 실행 결과 정리 (커서/컬럼 바인딩만 해제, 파라미터 바인딩은 유지)
 	SQLCloseCursor(Stmt);
 	SQLFreeStmt(Stmt, SQL_UNBIND);
 
-	SQLRETURN Ret = SQLExecDirectW(Stmt, (SQLWCHAR*)Query, SQL_NTS);
+	SQLRETURN Ret = SQLExecDirectW(Stmt, const_cast<SQLWCHAR*>(Query), SQL_NTS);
+
+	// 실행 완료 후 파라미터 바인딩 해제
+	SQLFreeStmt(Stmt, SQL_RESET_PARAMS);
 
 	if (Ret != SQL_SUCCESS && Ret != SQL_SUCCESS_WITH_INFO)
 	{
@@ -135,43 +140,114 @@ bool DBConnection::Fetch()
 // bool 컬럼을 C++ 변수에 바인딩한다.
 void DBConnection::BindCol(int32 iColumn, bool* OutValue)
 {
-	SQLBindCol(Stmt, iColumn, SQL_C_BIT, OutValue, 0, &Indicators[iColumn]);
+	ASSERT_CRASH(iColumn >= 1 && iColumn < MAX_COLUMNS);
+	SQLBindCol(Stmt, static_cast<SQLUSMALLINT>(iColumn), SQL_C_BIT, OutValue, 0, &Indicators[iColumn]);
 }
 
 // int16 컬럼을 C++ 변수에 바인딩한다.
 void DBConnection::BindCol(int32 iColumn, int16* OutValue)
 {
-	SQLBindCol(Stmt, iColumn, SQL_C_SSHORT, OutValue, 0, &Indicators[iColumn]);
+	ASSERT_CRASH(iColumn >= 1 && iColumn < MAX_COLUMNS);
+	SQLBindCol(Stmt, static_cast<SQLUSMALLINT>(iColumn), SQL_C_SSHORT, OutValue, 0, &Indicators[iColumn]);
 }
 
 // int32 컬럼을 C++ 변수에 바인딩한다.
 void DBConnection::BindCol(int32 iColumn, int32* OutValue)
 {
-	SQLBindCol(Stmt, iColumn, SQL_C_LONG, OutValue, 0, &Indicators[iColumn]);
+	ASSERT_CRASH(iColumn >= 1 && iColumn < MAX_COLUMNS);
+	SQLBindCol(Stmt, static_cast<SQLUSMALLINT>(iColumn), SQL_C_LONG, OutValue, 0, &Indicators[iColumn]);
 }
 
 // int64 컬럼을 C++ 변수에 바인딩한다.
 void DBConnection::BindCol(int32 iColumn, int64* OutValue)
 {
-	SQLBindCol(Stmt, iColumn, SQL_C_SBIGINT, OutValue, 0, &Indicators[iColumn]);
+	ASSERT_CRASH(iColumn >= 1 && iColumn < MAX_COLUMNS);
+	SQLBindCol(Stmt, static_cast<SQLUSMALLINT>(iColumn), SQL_C_SBIGINT, OutValue, 0, &Indicators[iColumn]);
 }
 
 // float 컬럼을 C++ 변수에 바인딩한다.
 void DBConnection::BindCol(int32 iColumn, float* OutValue)
 {
-	SQLBindCol(Stmt, iColumn, SQL_C_FLOAT, OutValue, 0, &Indicators[iColumn]);
+	ASSERT_CRASH(iColumn >= 1 && iColumn < MAX_COLUMNS);
+	SQLBindCol(Stmt, static_cast<SQLUSMALLINT>(iColumn), SQL_C_FLOAT, OutValue, 0, &Indicators[iColumn]);
 }
 
 // double 컬럼을 C++ 변수에 바인딩한다.
 void DBConnection::BindCol(int32 iColumn, double* OutValue)
 {
-	SQLBindCol(Stmt, iColumn, SQL_C_DOUBLE, OutValue, 0, &Indicators[iColumn]);
+	ASSERT_CRASH(iColumn >= 1 && iColumn < MAX_COLUMNS);
+	SQLBindCol(Stmt, static_cast<SQLUSMALLINT>(iColumn), SQL_C_DOUBLE, OutValue, 0, &Indicators[iColumn]);
 }
 
 // WCHAR 문자열 컬럼을 C++ 버퍼에 바인딩한다.
 void DBConnection::BindCol(int32 iColumn, WCHAR* OutValue, int32 iLen)
 {
-	SQLBindCol(Stmt, iColumn, SQL_C_WCHAR, OutValue, iLen, &Indicators[iColumn]);
+	ASSERT_CRASH(iColumn >= 1 && iColumn < MAX_COLUMNS);
+	SQLBindCol(Stmt, static_cast<SQLUSMALLINT>(iColumn), SQL_C_WCHAR, OutValue, iLen, &Indicators[iColumn]);
+}
+
+// bool 값을 파라미터에 바인딩한다.
+void DBConnection::BindParam(int32 iIndex, const bool& Value)
+{
+	ASSERT_CRASH(iIndex >= 1 && iIndex < MAX_COLUMNS);
+	SQLBindParameter(Stmt, static_cast<SQLUSMALLINT>(iIndex), SQL_PARAM_INPUT,
+		SQL_C_BIT, SQL_BIT, 0, 0,
+		const_cast<bool*>(&Value), 0, nullptr);
+}
+
+// int16 값을 파라미터에 바인딩한다.
+void DBConnection::BindParam(int32 iIndex, const int16& Value)
+{
+	ASSERT_CRASH(iIndex >= 1 && iIndex < MAX_COLUMNS);
+	SQLBindParameter(Stmt, static_cast<SQLUSMALLINT>(iIndex), SQL_PARAM_INPUT,
+		SQL_C_SSHORT, SQL_SMALLINT, 0, 0,
+		const_cast<int16*>(&Value), 0, nullptr);
+}
+
+// int32 값을 파라미터에 바인딩한다.
+void DBConnection::BindParam(int32 iIndex, const int32& Value)
+{
+	ASSERT_CRASH(iIndex >= 1 && iIndex < MAX_COLUMNS);
+	SQLBindParameter(Stmt, static_cast<SQLUSMALLINT>(iIndex), SQL_PARAM_INPUT,
+		SQL_C_SLONG, SQL_INTEGER, 0, 0,
+		const_cast<int32*>(&Value), 0, nullptr);
+}
+
+// int64 값을 파라미터에 바인딩한다.
+void DBConnection::BindParam(int32 iIndex, const int64& Value)
+{
+	ASSERT_CRASH(iIndex >= 1 && iIndex < MAX_COLUMNS);
+	SQLBindParameter(Stmt, static_cast<SQLUSMALLINT>(iIndex), SQL_PARAM_INPUT,
+		SQL_C_SBIGINT, SQL_BIGINT, 0, 0,
+		const_cast<int64*>(&Value), 0, nullptr);
+}
+
+// float 값을 파라미터에 바인딩한다.
+void DBConnection::BindParam(int32 iIndex, const float& Value)
+{
+	ASSERT_CRASH(iIndex >= 1 && iIndex < MAX_COLUMNS);
+	SQLBindParameter(Stmt, static_cast<SQLUSMALLINT>(iIndex), SQL_PARAM_INPUT,
+		SQL_C_FLOAT, SQL_REAL, 0, 0,
+		const_cast<float*>(&Value), 0, nullptr);
+}
+
+// double 값을 파라미터에 바인딩한다.
+void DBConnection::BindParam(int32 iIndex, const double& Value)
+{
+	ASSERT_CRASH(iIndex >= 1 && iIndex < MAX_COLUMNS);
+	SQLBindParameter(Stmt, static_cast<SQLUSMALLINT>(iIndex), SQL_PARAM_INPUT,
+		SQL_C_DOUBLE, SQL_DOUBLE, 0, 0,
+		const_cast<double*>(&Value), 0, nullptr);
+}
+
+// WCHAR 문자열을 파라미터에 바인딩한다. iSize는 컬럼의 문자 수(NVARCHAR 크기).
+void DBConnection::BindParam(int32 iIndex, const WCHAR* Value, int32 iSize)
+{
+	ASSERT_CRASH(iIndex >= 1 && iIndex < MAX_COLUMNS);
+	Indicators[iIndex] = static_cast<SQLLEN>(::wcslen(Value)) * static_cast<SQLLEN>(sizeof(WCHAR));
+	SQLBindParameter(Stmt, static_cast<SQLUSMALLINT>(iIndex), SQL_PARAM_INPUT,
+		SQL_C_WCHAR, SQL_WVARCHAR, iSize, 0,
+		const_cast<WCHAR*>(Value), static_cast<SQLLEN>(iSize) * static_cast<SQLLEN>(sizeof(WCHAR)), &Indicators[iIndex]);
 }
 
 // ODBC 에러 정보를 spdlog로 출력한다.
@@ -188,7 +264,7 @@ void DBConnection::HandleError(SQLHANDLE Handle, SQLSMALLINT Type)
 		// WCHAR -> char 변환하여 로그 출력
 		char Buf[1024] = {};
 		size_t Converted = 0;
-		wcstombs_s(&Converted, Buf, sizeof(Buf), Message, _TRUNCATE);
+		(void)wcstombs_s(&Converted, Buf, sizeof(Buf), Message, _TRUNCATE);
 		spdlog::error("[DBConnection] ODBC Error: {}", Buf);
 		iRecord++;
 	}

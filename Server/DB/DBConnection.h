@@ -27,6 +27,14 @@ public:
 	void BindCol(int32 iColumn, double* OutValue);
 	void BindCol(int32 iColumn, WCHAR* OutValue, int32 iLen);
 
+	void BindParam(int32 iIndex, const bool& Value);
+	void BindParam(int32 iIndex, const int16& Value);
+	void BindParam(int32 iIndex, const int32& Value);
+	void BindParam(int32 iIndex, const int64& Value);
+	void BindParam(int32 iIndex, const float& Value);
+	void BindParam(int32 iIndex, const double& Value);
+	void BindParam(int32 iIndex, const WCHAR* Value, int32 iSize);
+
 private:
 	void HandleError(SQLHANDLE Handle, SQLSMALLINT Type);
 

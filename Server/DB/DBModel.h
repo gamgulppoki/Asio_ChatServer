@@ -10,13 +10,13 @@
 template<typename T>
 class DBModel
 {
-	// 컬럼 하나의 메타데이터: 이름, 바인드 함수, 값->SQL 변환 함수
+	// 컬럼 하나의 메타데이터: 이름, 결과 바인드 함수, 파라미터 바인드 함수
 	struct ColumnDesc
 	{
 		WString Name;
 		bool bAutoIncrement = false;
 		Function<void(DBConnection&, int32, T&)> BindFunc;
-		Function<WString(const T&)> ToSqlFunc;
+		Function<void(DBConnection&, int32&, const T&)> BindParamFunc;
 	};
 
 public:
@@ -37,9 +37,9 @@ public:
 		{
 			C.BindCol(iCol, &(Row.*MemberPtr));
 		};
-		Desc.ToSqlFunc = [MemberPtr](const T& Row) -> WString
+		Desc.BindParamFunc = [MemberPtr](DBConnection& C, int32& Idx, const T& Row)
 		{
-			return ToSqlLiteral(Row.*MemberPtr);
+			C.BindParam(Idx++, Row.*MemberPtr);
 		};
 		Columns.push_back(std::move(Desc));
 	}
@@ -55,9 +55,9 @@ public:
 		{
 			C.BindCol(iCol, Row.*MemberPtr, sizeof(WCHAR) * N);
 		};
-		Desc.ToSqlFunc = [MemberPtr](const T& Row) -> WString
+		Desc.BindParamFunc = [MemberPtr](DBConnection& C, int32& Idx, const T& Row)
 		{
-			return ToSqlLiteral(Row.*MemberPtr);
+			C.BindParam(Idx++, Row.*MemberPtr, N);
 		};
 		Columns.push_back(std::move(Desc));
 	}
@@ -65,18 +65,7 @@ public:
 	// 테이블의 모든 행을 조회한다.
 	Vector<T> SelectAll()
 	{
-		return SelectWhere(L"");
-	}
-
-	// 조건에 맞는 행을 조회한다. Condition이 비어있으면 전체 조회.
-	Vector<T> SelectWhere(const WCHAR* Condition)
-	{
 		WString Query = BuildSelectQuery();
-		if (Condition && Condition[0] != L'\0')
-		{
-			Query += L" WHERE ";
-			Query += Condition;
-		}
 
 		if (!Conn.Execute(Query.c_str()))
 			return {};
@@ -92,29 +81,28 @@ public:
 		return Results;
 	}
 
-	// 행 하나를 삽입한다. bAutoIncrement 컬럼은 자동으로 제외된다.
-	bool Insert(const T& Row)
-	{
-		WString Query = BuildInsertQuery(Row);
-		return Conn.Execute(Query.c_str());
-	}
-
-	// 조건에 맞는 행을 수정한다. bAutoIncrement 컬럼은 SET에서 제외된다.
-	bool Update(const T& Row, const WCHAR* Condition)
-	{
-		WString Query = BuildUpdateQuery(Row);
-		if (Condition && Condition[0] != L'\0')
-		{
-			Query += L" WHERE ";
-			Query += Condition;
-		}
-		return Conn.Execute(Query.c_str());
-	}
-
-	// 표현식 기반 조건 조회.
+	// 표현식 기반 조건 조회. WHERE 절의 값은 prepared 바인딩된다.
 	Vector<T> SelectWhere(const Expression& Expr)
 	{
-		return SelectWhere(Expr.Sql.c_str());
+		WString Query = BuildSelectQuery();
+		Query += L" WHERE ";
+		Query += Expr.Sql;
+
+		int32 Idx = 1;
+		Expr.Bind(Conn, Idx);
+
+		if (!Conn.Execute(Query.c_str()))
+			return {};
+
+		T Row = {};
+		for (int32 i = 0; i < static_cast<int32>(Columns.size()); i++)
+			Columns[i].BindFunc(Conn, i + 1, Row);
+
+		Vector<T> Results;
+		while (Conn.Fetch())
+			Results.push_back(Row);
+
+		return Results;
 	}
 
 	// 표현식 기반 단일 행 조회. 결과가 없으면 nullopt.
@@ -123,6 +111,9 @@ public:
 		WString Query = BuildSelectQuery(true);
 		Query += L" WHERE ";
 		Query += Expr.Sql;
+
+		int32 Idx = 1;
+		Expr.Bind(Conn, Idx);
 
 		if (!Conn.Execute(Query.c_str()))
 			return std::nullopt;
@@ -137,16 +128,49 @@ public:
 		return Row;
 	}
 
-	// 표현식 기반 조건 수정.
+	// 행 하나를 삽입한다. bAutoIncrement 컬럼은 자동으로 제외된다.
+	bool Insert(const T& Row)
+	{
+		WString Query = BuildInsertQuery();
+
+		int32 Idx = 1;
+		for (auto& Col : Columns)
+		{
+			if (Col.bAutoIncrement)
+				continue;
+			Col.BindParamFunc(Conn, Idx, Row);
+		}
+
+		return Conn.Execute(Query.c_str());
+	}
+
+	// 표현식 기반 조건 수정. SET 값과 WHERE 값 모두 prepared 바인딩된다.
 	bool Update(const T& Row, const Expression& Expr)
 	{
-		return Update(Row, Expr.Sql.c_str());
+		WString Query = BuildUpdateQuery();
+		Query += L" WHERE ";
+		Query += Expr.Sql;
+
+		int32 Idx = 1;
+		for (auto& Col : Columns)
+		{
+			if (Col.bAutoIncrement)
+				continue;
+			Col.BindParamFunc(Conn, Idx, Row);
+		}
+		Expr.Bind(Conn, Idx);
+
+		return Conn.Execute(Query.c_str());
 	}
 
 	// 조건에 맞는 행을 삭제한다. 실수 방지를 위해 조건은 필수.
 	bool Delete(const Expression& Expr)
 	{
 		WString Query = L"DELETE FROM " + TableName + L" WHERE " + Expr.Sql;
+
+		int32 Idx = 1;
+		Expr.Bind(Conn, Idx);
+
 		return Conn.Execute(Query.c_str());
 	}
 
@@ -166,8 +190,8 @@ private:
 		return Query;
 	}
 
-	// INSERT INTO TableName (col1, col2) VALUES (val1, val2)
-	WString BuildInsertQuery(const T& Row)
+	// INSERT INTO TableName (col1, col2) VALUES (?, ?)
+	WString BuildInsertQuery()
 	{
 		WString Cols;
 		WString Vals;
@@ -184,15 +208,15 @@ private:
 				Vals += L", ";
 			}
 			Cols += Col.Name;
-			Vals += Col.ToSqlFunc(Row);
+			Vals += L"?";
 			bFirst = false;
 		}
 
 		return L"INSERT INTO " + TableName + L" (" + Cols + L") VALUES (" + Vals + L")";
 	}
 
-	// UPDATE TableName SET col1 = val1, col2 = val2
-	WString BuildUpdateQuery(const T& Row)
+	// UPDATE TableName SET col1 = ?, col2 = ?
+	WString BuildUpdateQuery()
 	{
 		WString SetClause;
 		bool bFirst = true;
@@ -206,8 +230,7 @@ private:
 				SetClause += L", ";
 
 			SetClause += Col.Name;
-			SetClause += L" = ";
-			SetClause += Col.ToSqlFunc(Row);
+			SetClause += L" = ?";
 			bFirst = false;
 		}
 
