@@ -12,14 +12,20 @@ extern PacketHandlerFunc GPacketHandler[UINT16_MAX];
 
 enum : uint16
 {
-	PKT_C_ENTER_ROOM = 1000,
-	PKT_S_ENTER_ROOM = 1001,
-	PKT_C_CHAT = 1002,
-	PKT_S_CHAT = 1003,
+	PKT_C_REGISTER = 1000,
+	PKT_S_REGISTER = 1001,
+	PKT_C_LOGIN = 1002,
+	PKT_S_LOGIN = 1003,
+	PKT_C_ENTER_ROOM = 1004,
+	PKT_S_ENTER_ROOM = 1005,
+	PKT_C_CHAT = 1006,
+	PKT_S_CHAT = 1007,
 };
 
 // Forward declarations
 bool Handle_INVALID(SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen);
+bool Handle_C_REGISTER(SharedPtr<Session> SessionPtr, Protocol::C_REGISTER& Pkt);
+bool Handle_C_LOGIN(SharedPtr<Session> SessionPtr, Protocol::C_LOGIN& Pkt);
 bool Handle_C_ENTER_ROOM(SharedPtr<Session> SessionPtr, Protocol::C_ENTER_ROOM& Pkt);
 bool Handle_C_CHAT(SharedPtr<Session> SessionPtr, Protocol::C_CHAT& Pkt);
 
@@ -31,6 +37,14 @@ public:
 		for (int32 i = 0; i < UINT16_MAX; i++)
 			GPacketHandler[i] = Handle_INVALID;
 
+		GPacketHandler[PKT_C_REGISTER] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::C_REGISTER>(Handle_C_REGISTER, SessionPtr, Buffer, iLen);
+		};
+		GPacketHandler[PKT_C_LOGIN] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::C_LOGIN>(Handle_C_LOGIN, SessionPtr, Buffer, iLen);
+		};
 		GPacketHandler[PKT_C_ENTER_ROOM] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
 		{
 			return HandlePacket<Protocol::C_ENTER_ROOM>(Handle_C_ENTER_ROOM, SessionPtr, Buffer, iLen);
@@ -47,6 +61,8 @@ public:
 		return GPacketHandler[Header->iId](SessionPtr, Buffer, iLen);
 	}
 
+	static SendBufferRef MakeSendBuffer(Protocol::S_REGISTER& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_REGISTER); }
+	static SendBufferRef MakeSendBuffer(Protocol::S_LOGIN& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_LOGIN); }
 	static SendBufferRef MakeSendBuffer(Protocol::S_ENTER_ROOM& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_ENTER_ROOM); }
 	static SendBufferRef MakeSendBuffer(Protocol::S_CHAT& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_CHAT); }
 

@@ -4,6 +4,7 @@
     "columns": [
         { "name": "Id",    "type": "int32", "primary": true, "autoincrement": true },
         { "name": "Name",  "type": "wchar", "size": 50 },
-        { "name": "Email", "type": "wchar", "size": 100 }
+        { "name": "Email", "type": "wchar", "size": 100 },
+        { "name": "PasswordHash", "type": "wchar", "size": 128 }
     ]
 }

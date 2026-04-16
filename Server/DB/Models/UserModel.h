@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "DB/DBModel.h"
+#include "../DB/DBModel.h"
 
 // Users 테이블에 대응하는 구조체.
 struct User
@@ -8,6 +8,7 @@ struct User
 	int32 Id = 0;
 	WCHAR Name[50] = {};
 	WCHAR Email[100] = {};
+	WCHAR PasswordHash[128] = {};
 };
 
 // User 구조체와 Users 테이블의 매핑을 설정한 DBModel을 생성한다.
@@ -17,5 +18,6 @@ inline DBModel<User> CreateUserModel(DBConnection& Conn)
 	Model.AddColumn(L"Id", &User::Id, true);
 	Model.AddColumn(L"Name", &User::Name);
 	Model.AddColumn(L"Email", &User::Email);
+	Model.AddColumn(L"PasswordHash", &User::PasswordHash);
 	return Model;
 }

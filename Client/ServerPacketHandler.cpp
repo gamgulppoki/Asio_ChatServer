@@ -6,6 +6,28 @@
 
 PacketHandlerFunc GPacketHandler[UINT16_MAX];
 
+// 회원가입 결과를 수신한다.
+bool Handle_S_REGISTER(SharedPtr<Session> SessionPtr, Protocol::S_REGISTER& Pkt)
+{
+	if (Pkt.success())
+		std::cout << "[Register] Success." << std::endl;
+	else
+		std::cout << "[Register] Failed: " << Pkt.msg() << std::endl;
+
+	return true;
+}
+
+// 로그인 결과를 수신한다.
+bool Handle_S_LOGIN(SharedPtr<Session> SessionPtr, Protocol::S_LOGIN& Pkt)
+{
+	if (Pkt.success())
+		std::cout << "[Login] Welcome, " << Pkt.name() << "!" << std::endl;
+	else
+		std::cout << "[Login] Failed: " << Pkt.msg() << std::endl;
+
+	return true;
+}
+
 // 등록되지 않은 패킷 ID가 들어왔을 때 호출된다.
 bool Handle_INVALID(SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
 {

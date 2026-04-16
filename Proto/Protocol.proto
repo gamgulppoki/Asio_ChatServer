@@ -1,6 +1,32 @@
 syntax = "proto3";
 package Protocol;
 
+message C_REGISTER
+{
+	string name = 1;
+	string email = 2;
+	string password = 3;
+}
+
+message S_REGISTER
+{
+	bool success = 1;
+	string msg = 2;
+}
+
+message C_LOGIN
+{
+	string email = 1;
+	string password = 2;
+}
+
+message S_LOGIN
+{
+	bool success = 1;
+	string msg = 2;
+	string name = 3;
+}
+
 message C_ENTER_ROOM
 {
 	uint32 roomId = 1;
