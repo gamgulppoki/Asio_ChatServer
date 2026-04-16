@@ -117,6 +117,9 @@ inline constexpr S_CHAT::Impl_::Impl_(
         msg_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         playerid_{::uint64_t{0u}} {}
 
 template <typename>
@@ -312,11 +315,13 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Protocol::S_CHAT, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Protocol::S_CHAT, _impl_.playerid_),
         PROTOBUF_FIELD_OFFSET(::Protocol::S_CHAT, _impl_.msg_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::Protocol::S_CHAT, _impl_.name_),
+        2,
         0,
+        1,
 };
 
 static const ::_pbi::MigrationSchema
@@ -350,14 +355,14 @@ const char descriptor_table_protodef_Protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "\001(\010\022\013\n\003msg\030\002 \001(\t\022\014\n\004name\030\003 \001(\t\"\036\n\014C_ENTE"
     "R_ROOM\022\016\n\006roomId\030\001 \001(\r\"/\n\014S_ENTER_ROOM\022\017"
     "\n\007success\030\001 \001(\010\022\016\n\006roomId\030\002 \001(\r\"\025\n\006C_CHA"
-    "T\022\013\n\003msg\030\001 \001(\t\"\'\n\006S_CHAT\022\020\n\010playerId\030\001 \001"
-    "(\004\022\013\n\003msg\030\002 \001(\tb\006proto3"
+    "T\022\013\n\003msg\030\001 \001(\t\"5\n\006S_CHAT\022\020\n\010playerId\030\001 \001"
+    "(\004\022\013\n\003msg\030\002 \001(\t\022\014\n\004name\030\003 \001(\tb\006proto3"
 };
 static ::absl::once_flag descriptor_table_Protocol_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_Protocol_2eproto = {
     false,
     false,
-    383,
+    397,
     descriptor_table_protodef_Protocol_2eproto,
     "Protocol.proto",
     &descriptor_table_Protocol_2eproto_once,
@@ -2551,7 +2556,8 @@ PROTOBUF_NDEBUG_INLINE S_CHAT::Impl_::Impl_(
     [[maybe_unused]] const ::Protocol::S_CHAT& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        msg_(arena, from.msg_) {}
+        msg_(arena, from.msg_),
+        name_(arena, from.name_) {}
 
 S_CHAT::S_CHAT(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -2574,7 +2580,8 @@ PROTOBUF_NDEBUG_INLINE S_CHAT::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        msg_(arena) {}
+        msg_(arena),
+        name_(arena) {}
 
 inline void S_CHAT::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -2592,6 +2599,7 @@ inline void S_CHAT::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.msg_.Destroy();
+  this_._impl_.name_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -2638,16 +2646,16 @@ S_CHAT::GetClassData() const {
   return S_CHAT_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 2, 0, 27, 2>
+const ::_pbi::TcParseTable<2, 3, 0, 31, 2>
 S_CHAT::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(S_CHAT, _impl_._has_bits_),
     0, // no _extensions_
-    2, 8,  // max_field_number, fast_idx_mask
+    3, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967292,  // skipmap
+    4294967288,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    2,  // num_field_entries
+    3,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     S_CHAT_class_data_.base(),
@@ -2657,27 +2665,35 @@ S_CHAT::_table_ = {
     ::_pbi::TcParser::GetTable<::Protocol::S_CHAT>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // uint64 playerId = 1;
+    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(S_CHAT, _impl_.playerid_), 2>(),
+     {8, 2, 0,
+      PROTOBUF_FIELD_OFFSET(S_CHAT, _impl_.playerid_)}},
     // string msg = 2;
     {::_pbi::TcParser::FastUS1,
      {18, 0, 0,
       PROTOBUF_FIELD_OFFSET(S_CHAT, _impl_.msg_)}},
-    // uint64 playerId = 1;
-    {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(S_CHAT, _impl_.playerid_), 1>(),
-     {8, 1, 0,
-      PROTOBUF_FIELD_OFFSET(S_CHAT, _impl_.playerid_)}},
+    // string name = 3;
+    {::_pbi::TcParser::FastUS1,
+     {26, 1, 0,
+      PROTOBUF_FIELD_OFFSET(S_CHAT, _impl_.name_)}},
   }}, {{
     65535, 65535
   }}, {{
     // uint64 playerId = 1;
-    {PROTOBUF_FIELD_OFFSET(S_CHAT, _impl_.playerid_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    {PROTOBUF_FIELD_OFFSET(S_CHAT, _impl_.playerid_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     // string msg = 2;
     {PROTOBUF_FIELD_OFFSET(S_CHAT, _impl_.msg_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string name = 3;
+    {PROTOBUF_FIELD_OFFSET(S_CHAT, _impl_.name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
   }},
   // no aux_entries
   {{
-    "\17\0\3\0\0\0\0\0"
+    "\17\0\3\4\0\0\0\0"
     "Protocol.S_CHAT"
     "msg"
+    "name"
   }},
 };
 PROTOBUF_NOINLINE void S_CHAT::Clear() {
@@ -2688,8 +2704,13 @@ PROTOBUF_NOINLINE void S_CHAT::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.msg_.ClearNonDefaultToEmpty();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.msg_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
   }
   _impl_.playerid_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
@@ -2716,7 +2737,7 @@ PROTOBUF_NOINLINE void S_CHAT::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 playerId = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_playerid() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2731,6 +2752,16 @@ PROTOBUF_NOINLINE void S_CHAT::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "Protocol.S_CHAT.msg");
       target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string name = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "Protocol.S_CHAT.name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
     }
   }
 
@@ -2759,7 +2790,7 @@ PROTOBUF_NOINLINE void S_CHAT::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // string msg = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_msg().empty()) {
@@ -2767,8 +2798,15 @@ PROTOBUF_NOINLINE void S_CHAT::Clear() {
                                         this_._internal_msg());
       }
     }
-    // uint64 playerId = 1;
+    // string name = 3;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // uint64 playerId = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_playerid() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_playerid());
@@ -2793,7 +2831,7 @@ void S_CHAT::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_msg().empty()) {
         _this->_internal_set_msg(from._internal_msg());
@@ -2804,6 +2842,15 @@ void S_CHAT::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_playerid() != 0) {
         _this->_impl_.playerid_ = from._impl_.playerid_;
       }
@@ -2829,6 +2876,7 @@ void S_CHAT::InternalSwap(S_CHAT* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.msg_, &other->_impl_.msg_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   swap(_impl_.playerid_, other->_impl_.playerid_);
 }
 

@@ -49,6 +49,6 @@ bool Handle_S_ENTER_ROOM(SharedPtr<Session> SessionPtr, Protocol::S_ENTER_ROOM& 
 // 서버로부터 채팅 메시지를 수신하여 출력한다.
 bool Handle_S_CHAT(SharedPtr<Session> SessionPtr, Protocol::S_CHAT& Pkt)
 {
-	std::cout << "[Player " << Pkt.playerid() << "] " << Pkt.msg() << std::endl;
+	std::cout << "[" << Pkt.name() << "] " << Pkt.msg() << std::endl;
 	return true;
 }

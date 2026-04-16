@@ -874,6 +874,7 @@ class S_CHAT final : public ::google::protobuf::Message
   // accessors -------------------------------------------------------
   enum : int {
     kMsgFieldNumber = 2,
+    kNameFieldNumber = 3,
     kPlayerIdFieldNumber = 1,
   };
   // string msg = 2;
@@ -891,6 +892,21 @@ class S_CHAT final : public ::google::protobuf::Message
   ::std::string* PROTOBUF_NONNULL _internal_mutable_msg();
 
   public:
+  // string name = 3;
+  void clear_name() ;
+  const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
   // uint64 playerId = 1;
   void clear_playerid() ;
   ::uint64_t playerid() const;
@@ -905,8 +921,8 @@ class S_CHAT final : public ::google::protobuf::Message
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
-                                   0, 27,
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
+                                   0, 31,
                                    2>
       _table_;
 
@@ -928,6 +944,7 @@ class S_CHAT final : public ::google::protobuf::Message
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr msg_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
     ::uint64_t playerid_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2522,7 +2539,7 @@ inline void S_CHAT::clear_playerid() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.playerid_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0],
-                  0x00000002U);
+                  0x00000004U);
 }
 inline ::uint64_t S_CHAT::playerid() const {
   // @@protoc_insertion_point(field_get:Protocol.S_CHAT.playerId)
@@ -2530,7 +2547,7 @@ inline ::uint64_t S_CHAT::playerid() const {
 }
 inline void S_CHAT::set_playerid(::uint64_t value) {
   _internal_set_playerid(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:Protocol.S_CHAT.playerId)
 }
 inline ::uint64_t S_CHAT::_internal_playerid() const {
@@ -2605,6 +2622,71 @@ inline void S_CHAT::set_allocated_msg(::std::string* PROTOBUF_NULLABLE value) {
     _impl_.msg_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:Protocol.S_CHAT.msg)
+}
+
+// string name = 3;
+inline void S_CHAT::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& S_CHAT::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Protocol.S_CHAT.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void S_CHAT::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Protocol.S_CHAT.name)
+}
+inline ::std::string* PROTOBUF_NONNULL S_CHAT::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:Protocol.S_CHAT.name)
+  return _s;
+}
+inline const ::std::string& S_CHAT::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void S_CHAT::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL S_CHAT::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE S_CHAT::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Protocol.S_CHAT.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void S_CHAT::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Protocol.S_CHAT.name)
 }
 
 #ifdef __GNUC__

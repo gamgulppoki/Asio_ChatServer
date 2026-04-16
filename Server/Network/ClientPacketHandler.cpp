@@ -128,12 +128,13 @@ bool Handle_C_LOGIN(SharedPtr<Session> SessionPtr, Protocol::C_LOGIN& Pkt)
 		return true;
 	}
 
-	// 로그인 성공
+	// 로그인 성공 -- 세션에 닉네임 저장
 	std::string Utf8Name = StringUtils::WideToUtf8(Found->Name);
+	GameSessionPtr->GetPlayerInfo().Nickname = StringUtils::Utf8ToWide(Utf8Name);
 	ResPkt.set_success(true);
 	ResPkt.set_msg("Login successful");
 	ResPkt.set_name(Utf8Name);
-	spdlog::info("User logged in: {}", Pkt.email());
+	spdlog::info("User logged in: {} ({})", Utf8Name, Pkt.email());
 	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
 	return true;
 }
@@ -198,6 +199,7 @@ bool Handle_C_CHAT(SharedPtr<Session> SessionPtr, Protocol::C_CHAT& Pkt)
 	Protocol::S_CHAT ChatPkt;
 	ChatPkt.set_playerid(GameSessionPtr->GetPlayerId());
 	ChatPkt.set_msg(Pkt.msg());
+	ChatPkt.set_name(StringUtils::WideToUtf8(GameSessionPtr->GetPlayerInfo().Nickname));
 
 	SendBufferRef Buffer = ClientPacketHandler::MakeSendBuffer(ChatPkt);
 
