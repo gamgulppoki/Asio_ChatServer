@@ -175,12 +175,16 @@
     </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="ClientApp.h" />
+    <ClInclude Include="ClientSession.h" />
     <ClInclude Include="ServerPacketHandler.h" />
     <ClInclude Include="Protocol.pb.h" />
     <None Include="..\Proto\Protocol.proto" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Client.cpp" />
+    <ClCompile Include="ClientApp.cpp" />
+    <ClCompile Include="ClientSession.cpp" />
     <ClCompile Include="ServerPacketHandler.cpp" />
     <ClCompile Include="Protocol.pb.cc" />
   </ItemGroup>
