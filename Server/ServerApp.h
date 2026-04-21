@@ -17,6 +17,7 @@ public:
 	void Run();
 
 private:
+	void InitDB();
 	void InitRooms();
 
 	GlobalQueue       GlobalQueueInstance_;

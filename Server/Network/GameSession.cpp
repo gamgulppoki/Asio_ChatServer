@@ -3,9 +3,6 @@
 #include "ClientPacketHandler.h"
 #include "Packet/PacketHeader.h"
 #include <spdlog/spdlog.h>
-#include <atomic>
-
-static std::atomic<uint64> SPlayerIdGenerator = 1;
 
 GameSession::GameSession(TcpSocket Socket)
 	: Session(std::move(Socket))
@@ -18,11 +15,10 @@ void GameSession::SetRoom(SharedPtr<Room> RoomPtr)
 	CurrentRoom = RoomPtr;
 }
 
-// 접속 시 호출. 임시 PlayerId를 부여한다. (로그인 구현 후 DB 기반으로 교체 예정)
+// 접속 시 호출. PlayerId는 로그인 성공 시점에 DB User.Id로 세팅된다.
 void GameSession::OnConnected()
 {
-	Info.PlayerId = SPlayerIdGenerator.fetch_add(1);
-	spdlog::info("Client connected - PlayerId: {}", Info.PlayerId);
+	spdlog::info("Client connected");
 }
 
 // 수신 데이터에서 완성된 패킷을 꺼내 처리한다. 처리한 바이트 수를 반환.

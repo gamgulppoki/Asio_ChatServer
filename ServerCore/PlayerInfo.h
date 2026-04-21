@@ -13,6 +13,6 @@ enum class SessionState
 // 클라/서버 공통 유저 정보. 로그인 전에는 비어있고, 로그인 후 채워진다.
 struct PlayerInfo
 {
-	uint64 PlayerId = 0;
+	uint64  PlayerId = 0;   // 로그인 후 User 테이블의 PK로 세팅. 로그인 전엔 0.
 	WString Nickname;
 };

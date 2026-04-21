@@ -2,10 +2,10 @@
 #include "Room.h"
 
 // 새 방을 생성하고 목록에 추가한다.
-SharedPtr<Room> RoomManager::CreateRoom(const WString& Title)
+SharedPtr<Room> RoomManager::CreateRoom(const WString& roomName)
 {
 	uint32 RoomId = NextRoomId.fetch_add(1);
-	auto NewRoom = std::make_shared<Room>(RoomId, Title);
+	auto NewRoom = std::make_shared<Room>(RoomId, roomName);
 
 	{
 		WRITE_LOCK;

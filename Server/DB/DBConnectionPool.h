@@ -1,8 +1,10 @@
 #pragma once
 
-#include "DBConnection.h"
+#include "DB/ORM/DBConnection.h"
 #include <mutex>
 #include <condition_variable>
+
+#include "Types.h"
 
 // DB 연결 N개를 미리 만들어두고 Pop/Push로 대여/반납하는 풀.
 // ODBC 환경 핸들(SQLHENV)은 풀이 하나만 소유하며 모든 DBConnection이 공유한다.

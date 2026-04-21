@@ -182,17 +182,22 @@
     <ClInclude Include="Network\RoomManager.h" />
     <ClInclude Include="Network\ClientPacketHandler.h" />
     <ClInclude Include="Network\Protocol.pb.h" />
-    <ClInclude Include="DB\Column.h" />
-    <ClInclude Include="DB\DBConnection.h" />
     <ClInclude Include="DB\DBConnectionPool.h" />
-    <ClInclude Include="DB\DBModel.h" />
-    <ClInclude Include="DB\Models\UserCols.h" />
-    <ClInclude Include="DB\Models\UserModel.h" />
-    <ClInclude Include="Security\AuthUtils.h" />
+    <ClInclude Include="DB\ORM\Attributes.h" />
+    <ClInclude Include="DB\ORM\Column.h" />
+    <ClInclude Include="DB\ORM\Condition.h" />
+    <ClInclude Include="DB\ORM\DBConnection.h" />
+    <ClInclude Include="DB\ORM\DBContext.h" />
+    <ClInclude Include="DB\ORM\Meta.h" />
+    <ClInclude Include="DB\ORM\PrimaryProperty.h" />
+    <ClInclude Include="DB\ORM\Property.h" />
+    <ClInclude Include="DB\ORM\Sql.h" />
+    <ClInclude Include="DB\ORM\Types.h" />
+    <ClInclude Include="DB\Entities\Entities.h" />
+    <ClInclude Include="DB\Entities\Person.h" />
+    <ClInclude Include="DB\Generated\EntitiesGenerated.h" />
     <ClInclude Include="Security\InputValidator.h" />
     <None Include="..\Proto\Protocol.proto" />
-    <None Include="..\Tools\ModelGenerator\Models\User.json" />
-    <None Include="DB\Schema\Users.sql" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Server.cpp" />
@@ -204,9 +209,9 @@
     <ClCompile Include="Network\RoomManager.cpp" />
     <ClCompile Include="Network\ClientPacketHandler.cpp" />
     <ClCompile Include="Network\Protocol.pb.cc" />
-    <ClCompile Include="DB\DBConnection.cpp" />
     <ClCompile Include="DB\DBConnectionPool.cpp" />
-    <ClCompile Include="Security\AuthUtils.cpp" />
+    <ClCompile Include="DB\ORM\DBConnection.cpp" />
+    <ClCompile Include="DB\ORM\Property.cpp" />
     <ClCompile Include="Security\InputValidator.cpp" />
   </ItemGroup>
   <ItemGroup>

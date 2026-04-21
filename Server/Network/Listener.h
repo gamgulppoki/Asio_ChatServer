@@ -9,6 +9,7 @@ public:
 	Listener(IoContext& Context, uint16 iPort);
 
 	void Start();
+	void Stop();
 
 private:
 	asio::awaitable<void> DoAccept();

@@ -27,6 +27,34 @@ message S_LOGIN
 	string name = 3;
 }
 
+message Room
+{
+	int32 roomId = 1;
+	string roomName = 2;
+}
+
+message C_CREATE_ROOM
+{
+	string roomName = 1;
+}
+
+message S_CREATE_ROOM
+{
+	bool success = 1;
+	uint32 roomId = 2;
+}
+
+message C_GET_ROOM_LIST
+{
+	
+}
+
+message S_GET_ROOM_LIST
+{
+	bool success = 1;
+	repeated Room rooms = 2;
+}
+
 message C_ENTER_ROOM
 {
 	uint32 roomId = 1;
@@ -38,6 +66,16 @@ message S_ENTER_ROOM
 	uint32 roomId = 2;
 }
 
+message C_EXIT_ROOM
+{
+	uint32 roomId = 1;
+}
+
+message S_EXIT_ROOM
+{
+	int32 success = 1;
+}
+
 message C_CHAT
 {
 	string msg = 1;
@@ -45,7 +83,27 @@ message C_CHAT
 
 message S_CHAT
 {
-	uint64 playerId = 1;
+	string msg = 1;
+	string name = 2;
+}
+
+message C_UPDATE_NICKNAME
+{
+	string newNickname = 1;
+}
+
+message S_UPDATE_NICKNAME
+{
+	bool success = 1;
 	string msg = 2;
-	string name = 3;
+}
+
+message C_DELETE_ACCOUNT
+{
+}
+
+message S_DELETE_ACCOUNT
+{
+	bool success = 1;
+	string msg = 2;
 }

@@ -1,9 +1,11 @@
 ﻿#include "ServerApp.h"
 #include <spdlog/spdlog.h>
+#include <windows.h>
 
 // 서버 엔트리 포인트.
 int main(int argc, char* argv[])
 {
+	SetConsoleOutputCP(CP_UTF8);
 	try
 	{
 		ServerApp App;

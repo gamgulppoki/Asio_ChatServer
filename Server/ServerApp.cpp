@@ -4,6 +4,9 @@
 #include "ThreadManager.h"
 #include "Network/Listener.h"
 #include "Network/ClientPacketHandler.h"
+#include "DB/DBConnectionPool.h"
+#include "DB/ORM/Sql.h"
+#include "DB/Generated/EntitiesGenerated.h"
 #include <spdlog/spdlog.h>
 #include <thread>
 
@@ -42,17 +45,8 @@ void ServerApp::Run()
 		return;
 	}
 
-	// 스키마 적용은 풀에서 연결 하나 빌려 1회만 실행.
-	{
-		DBConnectionScope Scope(GDBPool);
-		if (!Scope->ApplySchema(L"DB/Schema"))
-		{
-			spdlog::error("[ServerApp] Schema apply failed");
-			return;
-		}
-	}
-
-	InitRooms();
+	InitDB();
+	//InitRooms();
 
 	auto Context = std::make_unique<IoContext>();
 
@@ -60,17 +54,36 @@ void ServerApp::Run()
 	AcceptListener.Start();
 
 	int32 iThreadCount = std::thread::hardware_concurrency();
-	ThreadManager Manager(*Context, iThreadCount);
-	GThreadManager = &Manager;
+	ThreadManager threadManager(*Context, iThreadCount);
+	GThreadManager = &threadManager;
 
-	Manager.Start();
-	Manager.Join();
+	threadManager.Start();
+	threadManager.Join();
 
 	// 명시적 종료 순서
 	GThreadManager = nullptr;
 	AcceptListener.Stop();
 	Context.reset();
 	GDBPool->Clear();
+}
+
+void ServerApp::InitDB()
+{
+	
+	// 엔티티 메타 등록 + 스키마 적용
+	register_all_generated();
+	{
+		DBConnectionScope Scope(GDBPool);
+		for (const auto& Entry : MetaRegistry::Instance().Entities)
+		{
+			const auto& meta = Entry.second;
+			if (!Scope->Execute(create_table_sql(meta)))
+			{
+				spdlog::error("[ServerApp] Schema apply failed for {}", meta.TableName);
+				return;
+			}
+		}
+	}
 }
 
 // 초기 방 생성

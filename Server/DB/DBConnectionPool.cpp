@@ -92,5 +92,10 @@ DBConnectionScope::DBConnectionScope(DBConnectionPool* InPool)
 DBConnectionScope::~DBConnectionScope()
 {
 	if (Conn)
+	{
+		// Commit/Rollback 미호출로 autocommit이 OFF로 남은 예외 경로 안전망.
+		// 정상 경로에서는 no-op (이미 ON).
+		Conn->RestoreAutocommit();
 		Pool->Push(Conn);
+	}
 }

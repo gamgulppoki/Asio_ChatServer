@@ -4,12 +4,13 @@
 #include "RoomManager.h"
 #include "../ServerGlobal.h"
 #include "../DB/DBConnectionPool.h"
-#include "../DB/Models/UserModel.h"
-#include "../DB/Models/UserCols.h"
-#include "../Security/AuthUtils.h"
 #include "../Security/InputValidator.h"
 #include "StringUtils.h"
 #include <spdlog/spdlog.h>
+
+#include "DB/Entities/Entities.h"
+#include "DB/ORM/DBContext.h"
+#include "DB/Generated/EntitiesGenerated.h"
 
 // 회원가입 요청을 처리한���.
 bool Handle_C_REGISTER(SharedPtr<Session> SessionPtr, Protocol::C_REGISTER& Pkt)
@@ -42,12 +43,13 @@ bool Handle_C_REGISTER(SharedPtr<Session> SessionPtr, Protocol::C_REGISTER& Pkt)
 
 	// DB 작업
 	DBConnectionScope Scope(GDBPool);
-	auto Model = CreateUserModel(*Scope.Get());
-
+	DBContext dbContext;
+	dbContext.SetDBConnection(Scope.Get());
+	std::unique_ptr<User> newUserPtr = std::make_unique<User>();
+	
 	// 이메일 중복 확인
-	WString WideEmail = StringUtils::Utf8ToWide(Pkt.email());
-	auto Existing = Model.SelectOne(UserCols::Email == WideEmail.c_str());
-	if (Existing.has_value())
+	auto Existing = dbContext.Set<User>().Where(Col<User>::Email == Pkt.email()).ToList();
+	if (!Existing.empty())
 	{
 		ResPkt.set_success(false);
 		ResPkt.set_msg("Email already registered");
@@ -55,26 +57,16 @@ bool Handle_C_REGISTER(SharedPtr<Session> SessionPtr, Protocol::C_REGISTER& Pkt)
 		return true;
 	}
 
-	// 비밀번호 해싱
-	std::string EncodedHash;
-	if (!AuthUtils::HashPassword(Pkt.password(), EncodedHash))
-	{
-		ResPkt.set_success(false);
-		ResPkt.set_msg("Internal error");
-		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
-		return true;
-	}
-
 	// User 구조체 채우기
-	User NewUser = {};
-	WString WideName = StringUtils::Utf8ToWide(Pkt.name());
-	WString WideHash = StringUtils::Utf8ToWide(EncodedHash);
-	::wcscpy_s(NewUser.Name, WideName.c_str());
-	::wcscpy_s(NewUser.Email, WideEmail.c_str());
-	::wcscpy_s(NewUser.PasswordHash, WideHash.c_str());
-
-	if (!Model.Insert(NewUser))
+	newUserPtr->Nickname = Pkt.name();
+	newUserPtr->Email = Pkt.email();
+	newUserPtr->Password = Pkt.password();
+	
+	dbContext.Set<User>().Add(std::move(newUserPtr));
+	
+	if (!dbContext.SaveChanges())
 	{
+		// 실패 분기
 		ResPkt.set_success(false);
 		ResPkt.set_msg("Database error");
 		spdlog::error("Failed to insert user: {}", Pkt.email());
@@ -82,6 +74,7 @@ bool Handle_C_REGISTER(SharedPtr<Session> SessionPtr, Protocol::C_REGISTER& Pkt)
 		return true;
 	}
 
+	// 성공 분기
 	ResPkt.set_success(true);
 	ResPkt.set_msg("Registration successful");
 	spdlog::info("User registered: {}", Pkt.email());
@@ -89,7 +82,7 @@ bool Handle_C_REGISTER(SharedPtr<Session> SessionPtr, Protocol::C_REGISTER& Pkt)
 	return true;
 }
 
-// ���그인 요청을 처리한다.
+// 로그인 요청을 처리한다.
 bool Handle_C_LOGIN(SharedPtr<Session> SessionPtr, Protocol::C_LOGIN& Pkt)
 {
 	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
@@ -104,13 +97,15 @@ bool Handle_C_LOGIN(SharedPtr<Session> SessionPtr, Protocol::C_LOGIN& Pkt)
 		return true;
 	}
 
-	// DB에서 유�� 조회
+	// DB에서 유저 조회
 	DBConnectionScope Scope(GDBPool);
-	auto Model = CreateUserModel(*Scope.Get());
+	DBContext dbContext;
+	dbContext.SetDBConnection(Scope.Get());
+	
+	auto Existing = dbContext.Set<User>().Where(Col<User>::Email == Pkt.email()).ToList();
 
-	WString WideEmail = StringUtils::Utf8ToWide(Pkt.email());
-	auto Found = Model.SelectOne(UserCols::Email == WideEmail.c_str());
-	if (!Found.has_value())
+	// 이메일 못 찾음
+	if (Existing.empty())
 	{
 		ResPkt.set_success(false);
 		ResPkt.set_msg("Email not found");
@@ -118,9 +113,10 @@ bool Handle_C_LOGIN(SharedPtr<Session> SessionPtr, Protocol::C_LOGIN& Pkt)
 		return true;
 	}
 
-	// 비밀번호 검증
-	std::string StoredHash = StringUtils::WideToUtf8(Found->PasswordHash);
-	if (!AuthUtils::VerifyPassword(StoredHash, Pkt.password()))
+	User* FoundUser = Existing.front();
+
+	// 비밀번호 검증 (평문 비교)
+	if (FoundUser->Password.value() != Pkt.password())
 	{
 		ResPkt.set_success(false);
 		ResPkt.set_msg("Wrong password");
@@ -128,13 +124,14 @@ bool Handle_C_LOGIN(SharedPtr<Session> SessionPtr, Protocol::C_LOGIN& Pkt)
 		return true;
 	}
 
-	// 로그인 성공 -- 세션에 닉네임 저장
-	std::string Utf8Name = StringUtils::WideToUtf8(Found->Name);
-	GameSessionPtr->GetPlayerInfo().Nickname = StringUtils::Utf8ToWide(Utf8Name);
+	// 로그인 성공 -- 세션에 닉네임 + User.Id 저장
+	const std::string& Nickname = FoundUser->Nickname.value();
+	GameSessionPtr->GetPlayerInfo().Nickname = StringUtils::Utf8ToWide(Nickname);
+	GameSessionPtr->GetPlayerInfo().PlayerId = FoundUser->Id.value();
 	ResPkt.set_success(true);
 	ResPkt.set_msg("Login successful");
-	ResPkt.set_name(Utf8Name);
-	spdlog::info("User logged in: {} ({})", Utf8Name, Pkt.email());
+	ResPkt.set_name(Nickname);
+	spdlog::info("User logged in: {} ({})", Nickname, Pkt.email());
 	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
 	return true;
 }
@@ -145,6 +142,73 @@ bool Handle_INVALID(SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
 	PacketHeader* Header = reinterpret_cast<PacketHeader*>(Buffer);
 	spdlog::warn("Unknown packet id: {}", Header->iId);
 	return false;
+}
+
+// 방 생성 요청을 처리한다.
+bool Handle_C_CREATE_ROOM(SharedPtr<Session> SessionPtr, Protocol::C_CREATE_ROOM& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	auto newRoom = GRoomManager->CreateRoom(StringUtils::Utf8ToWide(Pkt.roomname()));
+
+	Protocol::S_CREATE_ROOM ResPkt;
+	ResPkt.set_success(newRoom != nullptr);
+	if (newRoom)
+		ResPkt.set_roomid(newRoom->GetRoomId());
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+
+	if (newRoom)
+		spdlog::info("Room created: id={}, name={}", newRoom->GetRoomId(), Pkt.roomname());
+
+	return true;
+}
+
+// 방 리스트 요청을 처리한다.
+bool Handle_C_GET_ROOM_LIST(SharedPtr<Session> SessionPtr, Protocol::C_GET_ROOM_LIST& Pkt)
+{
+	auto list = GRoomManager->GetRoomList();
+	
+	Protocol::S_GET_ROOM_LIST ResPkt;
+	ResPkt.set_success(true);
+	
+	for (const auto& room :	list)
+	{
+		Protocol::Room* RoomMsg = ResPkt.add_rooms();
+		RoomMsg->set_roomid((uint32)room->GetRoomId());
+		RoomMsg->set_roomname(StringUtils::WideToUtf8(room->GetRoomName()));
+	}
+	
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+	
+	return true;
+}
+
+// 방 퇴장 요청을 처리한다.
+bool Handle_C_EXIT_ROOM(SharedPtr<Session> SessionPtr, Protocol::C_EXIT_ROOM& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	auto RoomPtr = GameSessionPtr->GetRoom();
+
+	Protocol::S_EXIT_ROOM ResPkt;
+
+	if (RoomPtr)
+	{
+		uint32 RoomId = RoomPtr->GetRoomId();
+		RoomPtr->Push([RoomPtr, GameSessionPtr]()
+		{
+			RoomPtr->Leave(GameSessionPtr);
+		});
+		GameSessionPtr->SetRoom(nullptr);
+		ResPkt.set_success(1);
+		spdlog::info("Player {} left room {}", GameSessionPtr->GetPlayerId(), RoomId);
+	}
+	else
+	{
+		ResPkt.set_success(0);
+	}
+
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+	return true;
 }
 
 // 클라이언트가 방 입장을 요청하면, 해당 방에 입장시킨다.
@@ -197,7 +261,6 @@ bool Handle_C_CHAT(SharedPtr<Session> SessionPtr, Protocol::C_CHAT& Pkt)
 	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
 
 	Protocol::S_CHAT ChatPkt;
-	ChatPkt.set_playerid(GameSessionPtr->GetPlayerId());
 	ChatPkt.set_msg(Pkt.msg());
 	ChatPkt.set_name(StringUtils::WideToUtf8(GameSessionPtr->GetPlayerInfo().Nickname));
 
@@ -212,5 +275,123 @@ bool Handle_C_CHAT(SharedPtr<Session> SessionPtr, Protocol::C_CHAT& Pkt)
 		});
 	}
 
+	return true;
+}
+
+// 닉네임 변경 요청을 처리한다.
+bool Handle_C_UPDATE_NICKNAME(SharedPtr<Session> SessionPtr, Protocol::C_UPDATE_NICKNAME& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	Protocol::S_UPDATE_NICKNAME ResPkt;
+
+	// 입력 검증
+	if (!InputValidator::IsValidName(Pkt.newnickname()))
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Invalid nickname (2-20 characters)");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	const uint64 UserId = GameSessionPtr->GetPlayerInfo().PlayerId;
+	if (UserId == 0)
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Not logged in");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	// DB 조회 및 업데이트
+	DBConnectionScope Scope(GDBPool);
+	DBContext dbContext;
+	dbContext.SetDBConnection(Scope.Get());
+
+	auto Users = dbContext.Set<User>().Where(Col<User>::Id == static_cast<int64>(UserId)).ToList();
+	if (Users.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("User not found");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	User* FoundUser = Users.front();
+	FoundUser->Nickname = Pkt.newnickname();
+
+	if (!dbContext.SaveChanges())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Database error");
+		spdlog::error("Failed to update nickname for UserId {}", UserId);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	// 세션 PlayerInfo 동기화
+	GameSessionPtr->GetPlayerInfo().Nickname = StringUtils::Utf8ToWide(Pkt.newnickname());
+
+	ResPkt.set_success(true);
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+	spdlog::info("UserId {} changed nickname to {}", UserId, Pkt.newnickname());
+	return true;
+}
+
+// 계정 탈퇴 요청을 처리한다.
+bool Handle_C_DELETE_ACCOUNT(SharedPtr<Session> SessionPtr, Protocol::C_DELETE_ACCOUNT& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	Protocol::S_DELETE_ACCOUNT ResPkt;
+
+	const uint64 UserId = GameSessionPtr->GetPlayerInfo().PlayerId;
+	if (UserId == 0)
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Not logged in");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	// DB 조회 및 삭제
+	DBConnectionScope Scope(GDBPool);
+	DBContext dbContext;
+	dbContext.SetDBConnection(Scope.Get());
+
+	auto Users = dbContext.Set<User>().Where(Col<User>::Id == static_cast<int64>(UserId)).ToList();
+	if (Users.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("User not found");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	dbContext.Set<User>().Delete(Users.front());
+
+	if (!dbContext.SaveChanges())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Database error");
+		spdlog::error("Failed to delete UserId {}", UserId);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	// 방에 있다면 Leave 처리
+	auto RoomPtr = GameSessionPtr->GetRoom();
+	if (RoomPtr)
+	{
+		RoomPtr->Push([RoomPtr, GameSessionPtr]()
+		{
+			RoomPtr->Leave(GameSessionPtr);
+		});
+		GameSessionPtr->SetRoom(nullptr);
+	}
+
+	ResPkt.set_success(true);
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+	spdlog::info("UserId {} deleted account", UserId);
+
+	// 클라가 응답 받고 자체적으로 Disconnect할 예정이므로 서버에서 먼저 끊지 않음
 	return true;
 }

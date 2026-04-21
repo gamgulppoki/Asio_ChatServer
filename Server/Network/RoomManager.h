@@ -9,7 +9,7 @@ class Room;
 class RoomManager
 {
 public:
-	SharedPtr<Room> CreateRoom(const WString& Title);
+	SharedPtr<Room> CreateRoom(const WString& roomName);
 	SharedPtr<Room> FindRoom(uint32 RoomId);
 	Vector<SharedPtr<Room>> GetRoomList();
 	void RemoveRoom(uint32 RoomId);

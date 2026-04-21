@@ -14,6 +14,14 @@ void Listener::Start()
 	spdlog::info("Listening on port {}", Acceptor_.local_endpoint().port());
 }
 
+// Acceptor를 닫아 새 접속을 거부한다. DoAccept 코루틴도 종료된다.
+void Listener::Stop()
+{
+	ErrorCode Error;
+	Acceptor_.close(Error);
+	spdlog::info("Listener stopped");
+}
+
 // 클라이언트 접속을 코루틴으로 대기하고, 접속마다 GameSession을 생성한다.
 asio::awaitable<void> Listener::DoAccept()
 {
