@@ -11,6 +11,7 @@
 #include "Meta.h"
 #include "Sql.h"
 #include "Column.h"
+#include "IncludeEntry.h"
 
 enum class DBOp
 {
@@ -60,6 +61,23 @@ class DBContext
             context->AddChanges(ChangeEntry{ DBOp::MODIFIED, typeid(T), obj });
         }
         
+        template<typename Target>
+        DbSet<T> Include(Navigation<Target> T::* member) const
+        {
+            DbSet<T> copy = *this;
+            const auto& meta = MetaRegistry::Instance().Entities.at(typeid(T));
+            
+            for (const auto& rel : meta.Relations)
+            {
+                if (rel.Matches(&member))
+                {
+                    copy.Includes.push_back({&rel});
+                }
+            }
+            
+            return copy;
+        }
+        
         DbSet<T> Where(Condition condition) const
         {
             DbSet<T> copy = *this;
@@ -77,8 +95,8 @@ class DBContext
 
             const auto& meta = MetaRegistry::Instance().Entities.at(typeid(T));
 
-            // 1. SELECT SQL 생성
-            std::string sql = select_sql(meta, Conditions);
+            // 1. SELECT SQL 생성 (Includes 있으면 JOIN 자동 포함)
+            std::string sql = select_sql(meta, Conditions, Includes);
 
             // 2. WHERE 파라미터 바인딩 (값/lenInd는 Execute까지 살아있어야 함)
             std::vector<DbValue> paramVals;
@@ -105,6 +123,8 @@ class DBContext
             }
 
             // 3. 출력 컬럼용 슬롯 준비 + BindCol
+            //    슬롯 총 개수 = 메인 Fields + 각 Include 타겟의 Fields 합계
+            //    SELECT 절 순서 (메인 → Include1 → Include2 → ...) 그대로 BindCol
             struct ColumnSlot
             {
                 TypeTag tag = TypeTag::NONE;
@@ -114,29 +134,50 @@ class DBContext
                 char    str[4096] = {};
                 SQLLEN  lenInd = 0;
             };
-            std::vector<ColumnSlot> slots(meta.Fields.size());
 
-            for (size_t i = 0; i < meta.Fields.size(); ++i)
+            size_t totalSlots = meta.Fields.size();
+            for (const auto& inc : Includes)
             {
-                auto& s = slots[i];
-                s.tag = meta.Fields[i].DataType;
-                switch (s.tag)
+                const auto& targetMeta = MetaRegistry::Instance().Entities.at(inc.Relation->TargetType);
+                totalSlots += targetMeta.Fields.size();
+            }
+            std::vector<ColumnSlot> slots(totalSlots);
+
+            // 슬롯 하나에 BindCol 을 태그별로 호출하는 헬퍼
+            auto bindSlot = [&](ColumnSlot& s, TypeTag tag, int32 colIdx)
+            {
+                s.tag = tag;
+                switch (tag)
                 {
                 case TypeTag::INT:
-                    conn->BindCol(int32(i + 1), &s.i64, &s.lenInd);
+                    conn->BindCol(colIdx, &s.i64, &s.lenInd);
                     break;
                 case TypeTag::DOUBLE:
-                    conn->BindCol(int32(i + 1), &s.f64, &s.lenInd);
+                    conn->BindCol(colIdx, &s.f64, &s.lenInd);
                     break;
                 case TypeTag::BOOL:
-                    conn->BindCol(int32(i + 1), &s.b, &s.lenInd);
+                    conn->BindCol(colIdx, &s.b, &s.lenInd);
                     break;
                 case TypeTag::STRING:
-                    conn->BindCol(int32(i + 1), s.str, int32(sizeof(s.str)), &s.lenInd);
+                    conn->BindCol(colIdx, s.str, int32(sizeof(s.str)), &s.lenInd);
                     break;
                 default:
                     break;
                 }
+            };
+
+            size_t slotIdx = 0;
+
+            // 3-a. 메인 엔티티 컬럼
+            for (size_t i = 0; i < meta.Fields.size(); ++i, ++slotIdx)
+                bindSlot(slots[slotIdx], meta.Fields[i].DataType, int32(slotIdx + 1));
+
+            // 3-b. 각 Include 타겟 엔티티 컬럼 (SELECT 순서와 동일)
+            for (const auto& inc : Includes)
+            {
+                const auto& targetMeta = MetaRegistry::Instance().Entities.at(inc.Relation->TargetType);
+                for (size_t i = 0; i < targetMeta.Fields.size(); ++i, ++slotIdx)
+                    bindSlot(slots[slotIdx], targetMeta.Fields[i].DataType, int32(slotIdx + 1));
             }
 
             // 4. 실행
@@ -199,6 +240,69 @@ class DBContext
                         break;
                     }
                 }
+                
+                // Include 타겟 hydrate (메인과 동일한 패턴: PK 추출 → Identity Map 체크 → miss 면 새로 만들고 write)
+                // 슬롯은 [메인 N개 | 타겟1 M개 | 타겟2 M'개 | ...] 순이라 offset 으로 범위 이동.
+                size_t offset = meta.Fields.size();
+                for (const auto& inc : Includes)
+                {
+                    const auto& targetMeta = MetaRegistry::Instance().Entities.at(inc.Relation->TargetType);
+
+                    // 타겟 PK 추출 (slots[offset + pkIdx] 위치)
+                    DbValue targetPk;
+                    {
+                        size_t pkIdx = targetMeta.FieldIndex.at(targetMeta.PrimaryKeyName);
+                        const auto& s = slots[offset + pkIdx];
+                        switch (s.tag)
+                        {
+                        case TypeTag::INT:    targetPk = DbValue{s.i64}; break;
+                        case TypeTag::DOUBLE: targetPk = DbValue{s.f64}; break;
+                        case TypeTag::BOOL:   targetPk = DbValue{s.b};   break;
+                        case TypeTag::STRING: targetPk = DbValue{std::string(s.str)}; break;
+                        default: break;
+                        }
+                    }
+
+                    // Identity Map 체크
+                    void* targetObj = context->FindInIdentityMap(inc.Relation->TargetType, targetPk);
+                    if (!targetObj)
+                    {
+                        // miss: 새 객체 만들고 hydrate
+                        targetObj = targetMeta.Factory();
+                        for (size_t i = 0; i < targetMeta.Fields.size(); ++i)
+                        {
+                            const auto& f = targetMeta.Fields[i];
+                            const auto& s = slots[offset + i];
+
+                            if (s.lenInd == SQL_NULL_DATA)
+                                continue;
+
+                            switch (s.tag)
+                            {
+                            case TypeTag::INT:
+                                f.Write(targetObj, DbValue{s.i64});
+                                break;
+                            case TypeTag::DOUBLE:
+                                f.Write(targetObj, DbValue{s.f64});
+                                break;
+                            case TypeTag::BOOL:
+                                f.Write(targetObj, DbValue{s.b});
+                                break;
+                            case TypeTag::STRING:
+                                f.Write(targetObj, DbValue{std::string(s.str)});
+                                break;
+                            default:
+                                break;
+                            }
+                        }
+                        context->RegisterInIdentityMap(inc.Relation->TargetType, targetPk, targetObj);
+                    }
+
+                    // TODO: obj 의 Navigation 슬롯에 targetObj 꽂기
+                    inc.Relation->BindObj(obj, targetObj);
+                    
+                    offset += targetMeta.Fields.size();
+                }
 
                 // 5-4. Map 에 등록 + results 에 push
                 // 소유권은 IdentityMap → DBContext 가 잡음. 여기선 delete 금물.
@@ -214,6 +318,7 @@ class DBContext
     public:
         DBContext* context = nullptr;
         std::vector<Condition> Conditions;
+        std::vector<IncludeEntry> Includes;
     };
     
 public:

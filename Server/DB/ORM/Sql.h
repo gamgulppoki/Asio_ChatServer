@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "IncludeEntry.h"
+
 inline std::string to_sql_type(TypeTag tag)
 {
     switch (tag)
@@ -108,37 +110,61 @@ inline std::string update_sql(const EntityMeta& meta, const std::vector<size_t>&
     return sql;
 }
 
-inline std::string select_sql(const EntityMeta& meta, const std::vector<Condition>& conditions)
+// includes 비어있으면 단일 테이블 SELECT, 있으면 JOIN 자동 포함.
+// alias 규칙: 메인은 t0, Include 는 순번대로 t1, t2, ... (같은 타겟 테이블 중복 조인 시 구분용)
+inline std::string select_sql(const EntityMeta& meta,
+                              const std::vector<Condition>& conditions,
+                              const std::vector<IncludeEntry>& includes = {})
 {
     std::string sql = "SELECT ";
 
+    // [1] SELECT 절 — 메인 테이블 컬럼 (t0.*)
     for (size_t i = 0; i < meta.Fields.size(); ++i)
     {
-        sql += "[" + meta.Fields[i].DataName + "]";
-        if (i + 1 < meta.Fields.size())
-            sql += ", ";
+        if (i > 0) sql += ", ";
+        sql += "t0.[" + meta.Fields[i].DataName + "]";
     }
 
-    sql += " FROM [" + meta.TableName + "]";
+    // [2] SELECT 절 — 각 Include 의 타겟 테이블 컬럼 (t1.*, t2.*, ...)
+    for (size_t idx = 0; idx < includes.size(); ++idx)
+    {
+        const auto& rel = *includes[idx].Relation;
+        const auto& targetMeta = MetaRegistry::Instance().Entities.at(rel.TargetType);
+        std::string alias = "t" + std::to_string(idx + 1);
+        for (const auto& f : targetMeta.Fields)
+            sql += ", " + alias + ".[" + f.DataName + "]";
+    }
 
+    // [3] FROM 절
+    sql += " FROM [" + meta.TableName + "] t0";
+
+    // [4] JOIN 절 — Include 마다 한 줄씩. ON 은 FK = 타겟 PK
+    for (size_t idx = 0; idx < includes.size(); ++idx)
+    {
+        const auto& rel = *includes[idx].Relation;
+        const auto& targetMeta = MetaRegistry::Instance().Entities.at(rel.TargetType);
+        std::string alias = "t" + std::to_string(idx + 1);
+        sql += " JOIN [" + rel.TargetTableName + "] " + alias
+             + " ON t0.[" + rel.FKColumnName + "]"
+             + " = " + alias + ".[" + targetMeta.PrimaryKeyName + "]";
+    }
+
+    // [5] WHERE 절 — conditions 의 컬럼은 메인 테이블 기준이므로 t0. 접두
     if (!conditions.empty())
     {
         sql += " WHERE ";
         for (size_t i = 0; i < conditions.size(); ++i)
         {
+            if (i > 0) sql += " AND ";
             const auto& c = conditions[i];
             // T-SQL은 "==" 대신 "=" 사용. C++ 스타일 "=="로 들어오면 치환.
             std::string op = c.op;
             if (op == "==" || op.empty())
                 op = "=";
-            sql += "[" + c.column + "] " + op + " ?";
-            if (i + 1 < conditions.size())
-                sql += " AND ";
+            sql += "t0.[" + c.column + "] " + op + " ?";
         }
     }
 
     sql += ";";
     return sql;
 }
-
-

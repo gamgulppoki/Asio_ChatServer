@@ -11,7 +11,11 @@
 template<> inline void describe_entity<{{ e.name }}>(EntityBuilder<{{ e.name }}>& b)
 {
 {% for field in e.members %}
+{% if field.is_nav %}
+    b.navigation("{{ field.name }}", "{{ field.fk_column }}", "{{ field.inner_type }}", &{{ e.name }}::{{ field.name }});
+{% else %}
     b.field("{{ field.name }}", &{{ e.name }}::{{ field.name }});
+{% endif %}
 {% endfor %}
 {% if e.pk %}
     b.primary_key("{{ e.pk }}");
@@ -22,7 +26,9 @@ template<> inline void describe_entity<{{ e.name }}>(EntityBuilder<{{ e.name }}>
 template<> struct Col<{{ e.name }}>
 {
 {% for field in e.members %}
+{% if not field.is_nav %}
     static inline ColumnRef<{{ field.inner_type }}> {{ field.name }}{"{{ field.name }}"};
+{% endif %}
 {% endfor %}
 };
 

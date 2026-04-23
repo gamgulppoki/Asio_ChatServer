@@ -25,6 +25,23 @@ Atomic<bool> GUpdateNicknameSuccess{false};
 Atomic<bool> GDeleteAccountDone{false};
 Atomic<bool> GDeleteAccountSuccess{false};
 
+Atomic<bool>       GFriendListDone{false};
+std::mutex         GFriendListMutex;
+Vector<FriendInfo> GFriendList;
+
+Atomic<bool>       GPendingFriendsDone{false};
+std::mutex         GPendingFriendsMutex;
+Vector<FriendInfo> GPendingFriends;
+
+Atomic<bool>       GRequestFriendDone{false};
+Atomic<bool>       GRequestFriendSuccess{false};
+Atomic<bool>       GAcceptFriendDone{false};
+Atomic<bool>       GAcceptFriendSuccess{false};
+Atomic<bool>       GRejectFriendDone{false};
+Atomic<bool>       GRejectFriendSuccess{false};
+Atomic<bool>       GRemoveFriendDone{false};
+Atomic<bool>       GRemoveFriendSuccess{false};
+
 // 회원가입 결과를 수신한다.
 bool Handle_S_REGISTER(SharedPtr<Session> SessionPtr, Protocol::S_REGISTER& Pkt)
 {
@@ -140,5 +157,79 @@ bool Handle_S_DELETE_ACCOUNT(SharedPtr<Session> SessionPtr, Protocol::S_DELETE_A
 
 	GDeleteAccountSuccess = Pkt.success();
 	GDeleteAccountDone    = true;
+	return true;
+}
+
+// 친구 요청 결과 수신.
+bool Handle_S_REQUEST_FRIEND(SharedPtr<Session> SessionPtr, Protocol::S_REQUEST_FRIEND& Pkt)
+{
+	if (!Pkt.success())
+		std::cout << "[Friend] Request failed: " << Pkt.msg() << std::endl;
+
+	GRequestFriendSuccess = Pkt.success();
+	GRequestFriendDone = true;
+	return true;
+}
+
+// 친구 요청 수락 결과 수신.
+bool Handle_S_ACCEPT_FRIEND(SharedPtr<Session> SessionPtr, Protocol::S_ACCEPT_FRIEND& Pkt)
+{
+	if (!Pkt.success())
+		std::cout << "[Friend] Accept failed: " << Pkt.msg() << std::endl;
+
+	GAcceptFriendSuccess = Pkt.success();
+	GAcceptFriendDone = true;
+	return true;
+}
+
+// 친구 요청 거절 결과 수신.
+bool Handle_S_REJECT_FRIEND(SharedPtr<Session> SessionPtr, Protocol::S_REJECT_FRIEND& Pkt)
+{
+	if (!Pkt.success())
+		std::cout << "[Friend] Reject failed: " << Pkt.msg() << std::endl;
+
+	GRejectFriendSuccess = Pkt.success();
+	GRejectFriendDone = true;
+	return true;
+}
+
+// 받은 친구 요청 목록 수신.
+bool Handle_S_GET_PENDING_FRIENDS(SharedPtr<Session> SessionPtr, Protocol::S_GET_PENDING_FRIENDS& Pkt)
+{
+	if (Pkt.success())
+	{
+		std::lock_guard<std::mutex> Lock(GPendingFriendsMutex);
+		GPendingFriends.clear();
+		GPendingFriends.reserve(Pkt.pendings_size());
+		for (const auto& f : Pkt.pendings())
+			GPendingFriends.push_back({ f.email(), f.nickname() });
+	}
+	GPendingFriendsDone = true;
+	return true;
+}
+
+// 친구 목록 수신.
+bool Handle_S_GET_FRIEND_LIST(SharedPtr<Session> SessionPtr, Protocol::S_GET_FRIEND_LIST& Pkt)
+{
+	if (Pkt.success())
+	{
+		std::lock_guard<std::mutex> Lock(GFriendListMutex);
+		GFriendList.clear();
+		GFriendList.reserve(Pkt.friends_size());
+		for (const auto& f : Pkt.friends())
+			GFriendList.push_back({ f.email(), f.nickname() });
+	}
+	GFriendListDone = true;
+	return true;
+}
+
+// 친구 삭제 결과 수신.
+bool Handle_S_REMOVE_FRIEND(SharedPtr<Session> SessionPtr, Protocol::S_REMOVE_FRIEND& Pkt)
+{
+	if (!Pkt.success())
+		std::cout << "[Friend] Remove failed: " << Pkt.msg() << std::endl;
+
+	GRemoveFriendSuccess = Pkt.success();
+	GRemoveFriendDone = true;
 	return true;
 }

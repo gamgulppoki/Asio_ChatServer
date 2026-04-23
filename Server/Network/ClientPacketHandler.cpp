@@ -395,3 +395,423 @@ bool Handle_C_DELETE_ACCOUNT(SharedPtr<Session> SessionPtr, Protocol::C_DELETE_A
 	// 클라가 응답 받고 자체적으로 Disconnect할 예정이므로 서버에서 먼저 끊지 않음
 	return true;
 }
+
+// 친구 요청을 처리한다.
+bool Handle_C_REQUEST_FRIEND(SharedPtr<Session> SessionPtr, Protocol::C_REQUEST_FRIEND& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	Protocol::S_REQUEST_FRIEND ResPkt;
+
+	// 입력 검증
+	if (!InputValidator::IsValidEmail(Pkt.email()))
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Invalid email format");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	const int64 MyUserId = GameSessionPtr->GetPlayerInfo().PlayerId;
+	if (MyUserId == 0)
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Not logged in");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	DBConnectionScope Scope(GDBPool);
+	DBContext dbContext;
+	dbContext.SetDBConnection(Scope.Get());
+
+	// 상대 User 조회
+	auto targets = dbContext.Set<User>().Where(Col<User>::Email == Pkt.email()).ToList();
+	if (targets.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Email not found");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	const int64 TargetUserId = targets.front()->Id.value();
+
+	// 자기 자신 체크
+	if (MyUserId == TargetUserId)
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Cannot add yourself");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	// (Me -> Target) 기존 관계 체크 (Pending/Accepted 둘 다)
+	auto sameDir = dbContext.Set<Friendship>()
+		.Where(Col<Friendship>::FromUserId == MyUserId)
+		.Where(Col<Friendship>::ToUserId   == TargetUserId)
+		.ToList();
+	if (!sameDir.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Already requested or already friends");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	// (Target -> Me) 역방향 pending 체크
+	auto reverse = dbContext.Set<Friendship>()
+		.Where(Col<Friendship>::FromUserId == TargetUserId)
+		.Where(Col<Friendship>::ToUserId   == MyUserId)
+		.ToList();
+	if (!reverse.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("The other user already sent you a request. Accept from pending list.");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	// INSERT
+	auto newF = std::make_unique<Friendship>();
+	newF->FromUserId = MyUserId;
+	newF->ToUserId   = TargetUserId;
+	newF->Status     = FriendStatus::Pending;
+	dbContext.Set<Friendship>().Add(std::move(newF));
+
+	if (!dbContext.SaveChanges())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Database error");
+		spdlog::error("Failed to insert friendship: {} -> {}", MyUserId, TargetUserId);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	ResPkt.set_success(true);
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+	spdlog::info("Friend request: {} -> {}", MyUserId, TargetUserId);
+	return true;
+}
+
+// 친구 요청 수락을 처리한다.
+bool Handle_C_ACCEPT_FRIEND(SharedPtr<Session> SessionPtr, Protocol::C_ACCEPT_FRIEND& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	Protocol::S_ACCEPT_FRIEND ResPkt;
+
+	if (!InputValidator::IsValidEmail(Pkt.email()))
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Invalid email format");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	const int64 MyUserId = GameSessionPtr->GetPlayerInfo().PlayerId;
+	if (MyUserId == 0)
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Not logged in");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	DBConnectionScope Scope(GDBPool);
+	DBContext dbContext;
+	dbContext.SetDBConnection(Scope.Get());
+
+	// 요청자(상대) User 조회
+	auto targets = dbContext.Set<User>().Where(Col<User>::Email == Pkt.email()).ToList();
+	if (targets.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Email not found");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	const int64 OtherUserId = targets.front()->Id.value();
+
+	// (Other -> Me) pending row 조회
+	auto rows = dbContext.Set<Friendship>()
+		.Where(Col<Friendship>::FromUserId == OtherUserId)
+		.Where(Col<Friendship>::ToUserId   == MyUserId)
+		.Where(Col<Friendship>::Status     == std::string(FriendStatus::Pending))
+		.ToList();
+	if (rows.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("No pending request from this user");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	// Status Pending -> Accepted (dirty 자동 마킹)
+	rows.front()->Status = FriendStatus::Accepted;
+	if (!dbContext.SaveChanges())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Database error");
+		spdlog::error("Failed to accept friendship: {} -> {}", OtherUserId, MyUserId);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	ResPkt.set_success(true);
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+	spdlog::info("Friend accepted: {} -> {}", OtherUserId, MyUserId);
+	return true;
+}
+
+// 친구 요청 거절을 처리한다.
+bool Handle_C_REJECT_FRIEND(SharedPtr<Session> SessionPtr, Protocol::C_REJECT_FRIEND& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	Protocol::S_REJECT_FRIEND ResPkt;
+
+	if (!InputValidator::IsValidEmail(Pkt.email()))
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Invalid email format");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	const int64 MyUserId = GameSessionPtr->GetPlayerInfo().PlayerId;
+	if (MyUserId == 0)
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Not logged in");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	DBConnectionScope Scope(GDBPool);
+	DBContext dbContext;
+	dbContext.SetDBConnection(Scope.Get());
+
+	// 요청자(상대) User 조회
+	auto targets = dbContext.Set<User>().Where(Col<User>::Email == Pkt.email()).ToList();
+	if (targets.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Email not found");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	const int64 OtherUserId = targets.front()->Id.value();
+
+	// (Other -> Me) pending row 조회
+	auto rows = dbContext.Set<Friendship>()
+		.Where(Col<Friendship>::FromUserId == OtherUserId)
+		.Where(Col<Friendship>::ToUserId   == MyUserId)
+		.Where(Col<Friendship>::Status     == std::string(FriendStatus::Pending))
+		.ToList();
+	if (rows.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("No pending request from this user");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	// DELETE
+	dbContext.Set<Friendship>().Delete(rows.front());
+	if (!dbContext.SaveChanges())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Database error");
+		spdlog::error("Failed to reject friendship: {} -> {}", OtherUserId, MyUserId);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	ResPkt.set_success(true);
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+	spdlog::info("Friend rejected: {} -> {}", OtherUserId, MyUserId);
+	return true;
+}
+
+// 받은 친구 요청 목록을 반환한다.
+bool Handle_C_GET_PENDING_FRIENDS(SharedPtr<Session> SessionPtr, Protocol::C_GET_PENDING_FRIENDS& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	Protocol::S_GET_PENDING_FRIENDS ResPkt;
+
+	const int64 MyUserId = GameSessionPtr->GetPlayerInfo().PlayerId;
+	if (MyUserId == 0)
+	{
+		ResPkt.set_success(false);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	DBConnectionScope Scope(GDBPool);
+	DBContext dbContext;
+	dbContext.SetDBConnection(Scope.Get());
+
+	// 받은 pending 요청 조회 + 요청자 User 정보 eager load
+	auto pendings = dbContext.Set<Friendship>()
+		.Include(&Friendship::FromUser)
+		.Where(Col<Friendship>::ToUserId == MyUserId)
+		.Where(Col<Friendship>::Status   == std::string(FriendStatus::Pending))
+		.ToList();
+
+	ResPkt.set_success(true);
+	for (Friendship* f : pendings)
+	{
+		User* fromUser = f->FromUser.Get();
+		if (!fromUser) continue;
+
+		Protocol::FriendInfo* info = ResPkt.add_pendings();
+		info->set_email(fromUser->Email.value());
+		info->set_nickname(fromUser->Nickname.value());
+	}
+
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+	return true;
+}
+
+// 친구 목록을 반환한다.
+bool Handle_C_GET_FRIEND_LIST(SharedPtr<Session> SessionPtr, Protocol::C_GET_FRIEND_LIST& Pkt)
+{	
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	Protocol::S_GET_FRIEND_LIST ResPkt;
+
+	const int64 MyUserId = GameSessionPtr->GetPlayerInfo().PlayerId;
+	if (MyUserId == 0)
+	{
+		ResPkt.set_success(false);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	DBConnectionScope Scope(GDBPool);
+	DBContext dbContext;
+	dbContext.SetDBConnection(Scope.Get());
+
+	auto friendList1 = dbContext.Set<Friendship>()
+		.Include(&Friendship::ToUser)
+		.Where(Col<Friendship>::FromUserId == MyUserId)
+		.Where(Col<Friendship>::Status   == std::string(FriendStatus::Accepted))
+		.ToList();
+	
+	auto friendList2 = dbContext.Set<Friendship>()
+		.Include(&Friendship::FromUser)
+		.Where(Col<Friendship>::ToUserId == MyUserId)
+		.Where(Col<Friendship>::Status   == std::string(FriendStatus::Accepted))
+		.ToList();
+
+	ResPkt.set_success(true);
+	for (Friendship* f : friendList1)
+	{
+		User* user = f->ToUser.Get();
+		if (!user) continue;
+		
+		Protocol::FriendInfo* info = ResPkt.add_friends();
+		info->set_email(user->Email.value());
+		info->set_nickname(user->Nickname.value());
+	}
+	
+	for (Friendship* f : friendList2)
+	{
+		User* user = f->FromUser.Get();
+		if (!user) continue;
+		
+		Protocol::FriendInfo* info = ResPkt.add_friends();
+		info->set_email(user->Email.value());
+		info->set_nickname(user->Nickname.value());
+	}
+
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+	return true;
+}
+
+// 친구 삭제를 처리한다.
+bool Handle_C_REMOVE_FRIEND(SharedPtr<Session> SessionPtr, Protocol::C_REMOVE_FRIEND& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	Protocol::S_REMOVE_FRIEND ResPkt;
+
+	if (!InputValidator::IsValidEmail(Pkt.email()))
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Invalid email format");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	const int64 MyUserId = GameSessionPtr->GetPlayerInfo().PlayerId;
+	if (MyUserId == 0)
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Not logged in");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	DBConnectionScope Scope(GDBPool);
+	DBContext dbContext;
+	dbContext.SetDBConnection(Scope.Get());
+
+	auto UserList = dbContext.Set<User>()
+		.Where(Col<User>::Email == Pkt.email())
+		.ToList();
+
+	if (UserList.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Email not found");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+	
+	auto TargetId = UserList.front()->Id.value();
+	
+	// id로 accept인 관계를 delete해야함
+	auto friendList1 = dbContext.Set<Friendship>()
+		.Where(Col<Friendship>::ToUserId == MyUserId)
+		.Where(Col<Friendship>::FromUserId == TargetId)
+		.Where(Col<Friendship>::Status == std::string(FriendStatus::Accepted))
+		.ToList();
+
+	auto friendList2 = dbContext.Set<Friendship>()
+		.Where(Col<Friendship>::FromUserId == MyUserId)
+		.Where(Col<Friendship>::ToUserId == TargetId)
+		.Where(Col<Friendship>::Status == std::string(FriendStatus::Accepted))
+		.ToList();
+
+	if (friendList1.empty() && friendList2.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Not a friend");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	// delete
+	for (auto& f : friendList1)
+	{
+		dbContext.Set<Friendship>().Delete(f);
+	}
+	
+	for (auto& f : friendList2)
+	{
+		dbContext.Set<Friendship>().Delete(f);
+	}
+	
+	if (!dbContext.SaveChanges())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Database error");
+		spdlog::error("Failed to remove friendship: {} <-> {}", MyUserId, TargetId);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	ResPkt.set_success(true);
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+	spdlog::info("Friend removed: {} <-> {}", MyUserId, TargetId);
+	return true;
+}

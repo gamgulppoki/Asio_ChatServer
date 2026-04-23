@@ -63,6 +63,7 @@ void ClientApp::Run()
 		case ClientState::Lobby:  LobbyLoop();  break;
 		case ClientState::Chat:   ChatLoop();   break;
 		case ClientState::MyPage: MyPageLoop(); break;
+		case ClientState::Friend: FriendLoop(); break;
 		default: break;
 		}
 	}
@@ -142,6 +143,7 @@ void ClientApp::LobbyLoop()
 	std::cout << "1. 방 생성\n";
 	std::cout << "2. 방 입장\n";
 	std::cout << "3. 마이페이지\n";
+	std::cout << "4. 친구 목록\n";
 	std::cout << "> ";
 
 	String MenuInput;
@@ -246,6 +248,11 @@ void ClientApp::LobbyLoop()
 	else if (iMenuChoice == 3)
 	{
 		State_ = ClientState::MyPage;
+		return;
+	}
+	else if (iMenuChoice == 4)
+	{
+		State_ = ClientState::Friend;
 		return;
 	}
 	else
@@ -413,6 +420,233 @@ void ClientApp::MyPageLoop()
 		return;
 	}
 	else if (iMenuChoice == 3)
+	{
+		State_ = ClientState::Lobby;
+		return;
+	}
+	else
+	{
+		std::cout << "잘못된 선택입니다." << std::endl;
+	}
+}
+
+// 친구 목록 + 친구 추가/요청 확인/친구 삭제 메뉴
+void ClientApp::FriendLoop()
+{
+	// 1. 진입 시 친구 목록 자동 fetch
+	GFriendListDone = false;
+	Protocol::C_GET_FRIEND_LIST GetListPkt;
+	SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(GetListPkt));
+
+	for (int32 i = 0; i < 50 && !GFriendListDone; ++i)
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	// 2. 목록 출력
+	std::cout << "=== 친구 목록 ===\n";
+	{
+		std::lock_guard<std::mutex> Lock(GFriendListMutex);
+		if (!GFriendListDone)
+			std::cout << "(서버 응답 없음)\n";
+		else if (GFriendList.empty())
+			std::cout << "(친구가 없습니다)\n";
+		else
+		{
+			for (const auto& F : GFriendList)
+				std::cout << "  - " << F.Email << " (" << F.Nickname << ")\n";
+		}
+	}
+
+	// 3. 메뉴
+	std::cout << "\n1. 친구 추가\n";
+	std::cout << "2. 친구 요청 확인\n";
+	std::cout << "3. 친구 삭제\n";
+	std::cout << "4. 뒤로가기\n";
+	std::cout << "> ";
+
+	String MenuInput;
+	std::getline(std::cin, MenuInput);
+
+	int32 iMenuChoice = 0;
+	try
+	{
+		iMenuChoice = std::stoi(MenuInput);
+	}
+	catch (const std::exception&)
+	{
+		std::cout << "잘못된 입력입니다." << std::endl;
+		return;
+	}
+
+	if (iMenuChoice == 1)
+	{
+		// 친구 추가: email 입력 -> C_REQUEST_FRIEND
+		std::cout << "추가할 친구 이메일: ";
+		String Email;
+		std::getline(std::cin, Email);
+
+		if (Email.empty())
+		{
+			std::cout << "이메일이 비어있습니다." << std::endl;
+			return;
+		}
+
+		GRequestFriendDone = false;
+		GRequestFriendSuccess = false;
+
+		Protocol::C_REQUEST_FRIEND Pkt;
+		Pkt.set_email(Email);
+		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
+
+		for (int32 i = 0; i < 50 && !GRequestFriendDone; ++i)
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+		if (!GRequestFriendDone)
+			std::cout << "서버 응답 없음" << std::endl;
+		else if (GRequestFriendSuccess)
+			std::cout << "친구 요청을 보냈습니다." << std::endl;
+
+		WaitForEnter();
+	}
+	else if (iMenuChoice == 2)
+	{
+		// 받은 요청 목록 fetch
+		GPendingFriendsDone = false;
+
+		Protocol::C_GET_PENDING_FRIENDS GetPendingPkt;
+		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(GetPendingPkt));
+
+		for (int32 i = 0; i < 50 && !GPendingFriendsDone; ++i)
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+		std::cout << "\n=== 받은 친구 요청 ===\n";
+		bool bEmpty = false;
+		{
+			std::lock_guard<std::mutex> Lock(GPendingFriendsMutex);
+			if (!GPendingFriendsDone)
+			{
+				std::cout << "(서버 응답 없음)\n";
+				WaitForEnter();
+				return;
+			}
+			if (GPendingFriends.empty())
+			{
+				std::cout << "(받은 요청이 없습니다)\n";
+				bEmpty = true;
+			}
+			else
+			{
+				for (const auto& F : GPendingFriends)
+					std::cout << "  - " << F.Email << " (" << F.Nickname << ")\n";
+			}
+		}
+
+		if (bEmpty)
+		{
+			WaitForEnter();
+			return;
+		}
+
+		// 액션 메뉴
+		std::cout << "\n1. 수락\n";
+		std::cout << "2. 거절\n";
+		std::cout << "3. 뒤로\n";
+		std::cout << "> ";
+
+		String ActionInput;
+		std::getline(std::cin, ActionInput);
+
+		int32 iAction = 0;
+		try
+		{
+			iAction = std::stoi(ActionInput);
+		}
+		catch (const std::exception&)
+		{
+			std::cout << "잘못된 입력입니다." << std::endl;
+			return;
+		}
+
+		if (iAction == 1 || iAction == 2)
+		{
+			std::cout << (iAction == 1 ? "수락할 " : "거절할 ") << "이메일: ";
+			String TargetEmail;
+			std::getline(std::cin, TargetEmail);
+
+			if (TargetEmail.empty())
+			{
+				std::cout << "이메일이 비어있습니다." << std::endl;
+				return;
+			}
+
+			if (iAction == 1)
+			{
+				GAcceptFriendDone = false;
+				GAcceptFriendSuccess = false;
+
+				Protocol::C_ACCEPT_FRIEND AcceptPkt;
+				AcceptPkt.set_email(TargetEmail);
+				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(AcceptPkt));
+
+				for (int32 i = 0; i < 50 && !GAcceptFriendDone; ++i)
+					std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+				if (!GAcceptFriendDone)
+					std::cout << "서버 응답 없음" << std::endl;
+				else if (GAcceptFriendSuccess)
+					std::cout << "친구 요청을 수락했습니다." << std::endl;
+			}
+			else
+			{
+				GRejectFriendDone = false;
+				GRejectFriendSuccess = false;
+
+				Protocol::C_REJECT_FRIEND RejectPkt;
+				RejectPkt.set_email(TargetEmail);
+				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(RejectPkt));
+
+				for (int32 i = 0; i < 50 && !GRejectFriendDone; ++i)
+					std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+				if (!GRejectFriendDone)
+					std::cout << "서버 응답 없음" << std::endl;
+				else if (GRejectFriendSuccess)
+					std::cout << "친구 요청을 거절했습니다." << std::endl;
+			}
+
+			WaitForEnter();
+		}
+	}
+	else if (iMenuChoice == 3)
+	{
+		// 친구 삭제: email 입력 -> C_REMOVE_FRIEND
+		std::cout << "삭제할 친구 이메일: ";
+		String Email;
+		std::getline(std::cin, Email);
+
+		if (Email.empty())
+		{
+			std::cout << "이메일이 비어있습니다." << std::endl;
+			return;
+		}
+
+		GRemoveFriendDone = false;
+		GRemoveFriendSuccess = false;
+
+		Protocol::C_REMOVE_FRIEND Pkt;
+		Pkt.set_email(Email);
+		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
+
+		for (int32 i = 0; i < 50 && !GRemoveFriendDone; ++i)
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+		if (!GRemoveFriendDone)
+			std::cout << "서버 응답 없음" << std::endl;
+		else if (GRemoveFriendSuccess)
+			std::cout << "친구를 삭제했습니다." << std::endl;
+
+		WaitForEnter();
+	}
+	else if (iMenuChoice == 4)
 	{
 		State_ = ClientState::Lobby;
 		return;

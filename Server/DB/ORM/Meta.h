@@ -3,6 +3,7 @@
 #include "Types.h"
 #include "Property.h"
 #include "PrimaryProperty.h"
+#include "Navigation.h"
 
 #include <functional>
 #include <string>
@@ -48,6 +49,19 @@ struct FieldMeta
     }
 };
 
+struct RelationMeta
+{
+    std::string Name;               // C++에서의 이름 (변수 이름)
+    std::string FKColumnName;       // 이 외래키를 가진 column의 이름
+    
+    std::string TargetTableName;    // 가리키는 테이블 이름 (상대 테이블의 pk를 무조건 가리킨다고 가정)
+    std::type_index TargetType;
+    
+    // Include 들어온 멤버 포인터 비교용 
+    std::function<bool(const void*)> Matches;
+    std::function<void(void*, void*)> BindObj;
+};
+
 // 얜 그냥 설명서 
 struct EntityMeta
 {
@@ -55,6 +69,7 @@ struct EntityMeta
     std::vector<FieldMeta> Fields; // 엔티티 인스턴스
     std::unordered_map<std::string, size_t> FieldIndex; // 이름 -> 인덱스
     std::string PrimaryKeyName; // PK 필드 이름
+    std::vector<RelationMeta> Relations; // 관계 메타 (Navigation 매칭용)
 
     std::function<void*()> Factory; // 인스턴스 생성
     std::function<void(void*)> Destroyer; // 인스턴스 소멸 (타입별 delete)
@@ -75,6 +90,8 @@ struct EntityMeta
         return Factory();
     }
 };
+
+
 
 template <typename T>
 struct EntityBuilder
@@ -195,6 +212,27 @@ struct EntityBuilder
         Meta.Fields.push_back(tmpMeta);
 
         primary_key(name);   // 자동 PK 등록
+    }
+    
+    template <typename M>
+    void navigation(std::string name, std::string fkColumnName, std::string targetTableName, Navigation<M> T::* member)
+    {
+        RelationMeta relationMeta{name, fkColumnName, targetTableName, typeid(M)};
+        relationMeta.Matches = [member](const void* ptr) -> bool
+        {
+            auto other = static_cast<const Navigation<M> T::* const*>(ptr);
+            return *other == member;
+        };
+        
+        // target 타입을 알 수 있기 때문에, 해당 타입으로 avigation 객체에 넣어주면 됨
+        relationMeta.BindObj = [member](void* FromObj, void* ToObj)
+        {
+            T* from = static_cast<T*>(FromObj);
+            M* to = static_cast<M*>(ToObj);
+            (from->*member).Bind(to);
+        };
+        
+        Meta.Relations.push_back(relationMeta);
     }
 
     void table(std::string name)

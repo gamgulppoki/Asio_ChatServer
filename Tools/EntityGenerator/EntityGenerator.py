@@ -53,7 +53,9 @@ def find_matching_brace(text: str, open_pos: int) -> int:
     return -1
 
 
-PROPERTY_INNER = re.compile(r'^\s*(?:Primary)?Property\s*<\s*(.+?)\s*>\s*$')
+PROPERTY_INNER   = re.compile(r'^\s*(?:Primary)?Property\s*<\s*(.+?)\s*>\s*$')
+NAVIGATION_INNER = re.compile(r'^\s*Navigation\s*<\s*(.+?)\s*>\s*$')
+FK_MACRO         = re.compile(r'\bFK\s*\(\s*(\w+)\s*\)')
 
 
 def parse_members(body: str):
@@ -63,6 +65,13 @@ def parse_members(body: str):
         stmt = ATTRIBUTE.sub('', stmt).strip()
         if not stmt:
             continue
+
+        # FK(XXX) 매크로 추출 후 제거. '(' 스킵 체크 이전에 처리해야 함
+        fk_match = FK_MACRO.search(stmt)
+        fk_column = fk_match.group(1) if fk_match else None
+        if fk_match:
+            stmt = FK_MACRO.sub('', stmt).strip()
+
         if '(' in stmt:              # skip methods
             continue
         stmt = re.sub(r'=.*$', '', stmt).strip()
@@ -72,9 +81,16 @@ def parse_members(body: str):
         name = tokens[-1]
         type_str = ' '.join(tokens[:-1])
 
-        # Property<T> / PrimaryProperty<T> 의 inner T 추출 (ColumnRef 의 타입 매개변수로 사용)
-        m = PROPERTY_INNER.match(type_str)
-        inner_type = m.group(1).strip() if m else type_str
+        # Navigation<T> 판별
+        nav_match = NAVIGATION_INNER.match(type_str)
+        is_nav = bool(nav_match)
+
+        # inner T 추출: Navigation<T> → T, Property<T>/PrimaryProperty<T> → T
+        if is_nav:
+            inner_type = nav_match.group(1).strip()
+        else:
+            m = PROPERTY_INNER.match(type_str)
+            inner_type = m.group(1).strip() if m else type_str
 
         # PK 판별: PrimaryProperty<T> 로 선언된 필드
         is_pk = type_str.lstrip().startswith('PrimaryProperty')
@@ -84,6 +100,8 @@ def parse_members(body: str):
             'name': name,
             'inner_type': inner_type,
             'is_pk': is_pk,
+            'is_nav': is_nav,
+            'fk_column': fk_column,
         })
     return fields
 

@@ -9,7 +9,7 @@ class ProtoParser:
         self.send_prefix = send_prefix
 
     def parse_proto(self, path):
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
 
         for line in lines:

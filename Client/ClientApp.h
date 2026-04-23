@@ -12,6 +12,7 @@ enum class ClientState
 	Lobby,
 	Chat,
 	MyPage,
+	Friend,
 	Exit,
 };
 
@@ -24,6 +25,13 @@ struct RoomInfo
 {
 	int32  RoomId;
 	String RoomName;
+};
+
+// 서버에서 수신한 친구/요청 목록의 개별 항목.
+struct FriendInfo
+{
+	String Email;
+	String Nickname;
 };
 
 // 방 리스트 수신 상태. LobbyLoop가 요청 후 대기하고, 수신 핸들러가 채운다.
@@ -44,6 +52,26 @@ extern Atomic<bool> GUpdateNicknameSuccess;
 extern Atomic<bool> GDeleteAccountDone;
 extern Atomic<bool> GDeleteAccountSuccess;
 
+// 친구 목록 수신 상태.
+extern Atomic<bool>        GFriendListDone;
+extern std::mutex          GFriendListMutex;
+extern Vector<FriendInfo>  GFriendList;
+
+// 받은 친구 요청 목록 수신 상태.
+extern Atomic<bool>        GPendingFriendsDone;
+extern std::mutex          GPendingFriendsMutex;
+extern Vector<FriendInfo>  GPendingFriends;
+
+// 요청/수락/거절/삭제 응답 상태.
+extern Atomic<bool>        GRequestFriendDone;
+extern Atomic<bool>        GRequestFriendSuccess;
+extern Atomic<bool>        GAcceptFriendDone;
+extern Atomic<bool>        GAcceptFriendSuccess;
+extern Atomic<bool>        GRejectFriendDone;
+extern Atomic<bool>        GRejectFriendSuccess;
+extern Atomic<bool>        GRemoveFriendDone;
+extern Atomic<bool>        GRemoveFriendSuccess;
+
 
 // 클라이언트 애플리케이션 최상위 클래스.
 // 서버 연결, 회원가입/로그인, 채팅 흐름을 관리한다.
@@ -60,6 +88,7 @@ private:
 	void LobbyLoop();
 	void ChatLoop();
 	void MyPageLoop();
+	void FriendLoop();
 
 	SendBufferManager SendBufferManagerInstance_;
 	IoContext Context_;

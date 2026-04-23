@@ -30,6 +30,18 @@ enum : uint16
 	PKT_S_UPDATE_NICKNAME = 1015,
 	PKT_C_DELETE_ACCOUNT = 1016,
 	PKT_S_DELETE_ACCOUNT = 1017,
+	PKT_C_REQUEST_FRIEND = 1018,
+	PKT_S_REQUEST_FRIEND = 1019,
+	PKT_C_ACCEPT_FRIEND = 1020,
+	PKT_S_ACCEPT_FRIEND = 1021,
+	PKT_C_REJECT_FRIEND = 1022,
+	PKT_S_REJECT_FRIEND = 1023,
+	PKT_C_GET_PENDING_FRIENDS = 1024,
+	PKT_S_GET_PENDING_FRIENDS = 1025,
+	PKT_C_GET_FRIEND_LIST = 1026,
+	PKT_S_GET_FRIEND_LIST = 1027,
+	PKT_C_REMOVE_FRIEND = 1028,
+	PKT_S_REMOVE_FRIEND = 1029,
 };
 
 // Forward declarations
@@ -43,6 +55,12 @@ bool Handle_C_EXIT_ROOM(SharedPtr<Session> SessionPtr, Protocol::C_EXIT_ROOM& Pk
 bool Handle_C_CHAT(SharedPtr<Session> SessionPtr, Protocol::C_CHAT& Pkt);
 bool Handle_C_UPDATE_NICKNAME(SharedPtr<Session> SessionPtr, Protocol::C_UPDATE_NICKNAME& Pkt);
 bool Handle_C_DELETE_ACCOUNT(SharedPtr<Session> SessionPtr, Protocol::C_DELETE_ACCOUNT& Pkt);
+bool Handle_C_REQUEST_FRIEND(SharedPtr<Session> SessionPtr, Protocol::C_REQUEST_FRIEND& Pkt);
+bool Handle_C_ACCEPT_FRIEND(SharedPtr<Session> SessionPtr, Protocol::C_ACCEPT_FRIEND& Pkt);
+bool Handle_C_REJECT_FRIEND(SharedPtr<Session> SessionPtr, Protocol::C_REJECT_FRIEND& Pkt);
+bool Handle_C_GET_PENDING_FRIENDS(SharedPtr<Session> SessionPtr, Protocol::C_GET_PENDING_FRIENDS& Pkt);
+bool Handle_C_GET_FRIEND_LIST(SharedPtr<Session> SessionPtr, Protocol::C_GET_FRIEND_LIST& Pkt);
+bool Handle_C_REMOVE_FRIEND(SharedPtr<Session> SessionPtr, Protocol::C_REMOVE_FRIEND& Pkt);
 
 class ClientPacketHandler
 {
@@ -88,6 +106,30 @@ public:
 		{
 			return HandlePacket<Protocol::C_DELETE_ACCOUNT>(Handle_C_DELETE_ACCOUNT, SessionPtr, Buffer, iLen);
 		};
+		GPacketHandler[PKT_C_REQUEST_FRIEND] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::C_REQUEST_FRIEND>(Handle_C_REQUEST_FRIEND, SessionPtr, Buffer, iLen);
+		};
+		GPacketHandler[PKT_C_ACCEPT_FRIEND] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::C_ACCEPT_FRIEND>(Handle_C_ACCEPT_FRIEND, SessionPtr, Buffer, iLen);
+		};
+		GPacketHandler[PKT_C_REJECT_FRIEND] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::C_REJECT_FRIEND>(Handle_C_REJECT_FRIEND, SessionPtr, Buffer, iLen);
+		};
+		GPacketHandler[PKT_C_GET_PENDING_FRIENDS] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::C_GET_PENDING_FRIENDS>(Handle_C_GET_PENDING_FRIENDS, SessionPtr, Buffer, iLen);
+		};
+		GPacketHandler[PKT_C_GET_FRIEND_LIST] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::C_GET_FRIEND_LIST>(Handle_C_GET_FRIEND_LIST, SessionPtr, Buffer, iLen);
+		};
+		GPacketHandler[PKT_C_REMOVE_FRIEND] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::C_REMOVE_FRIEND>(Handle_C_REMOVE_FRIEND, SessionPtr, Buffer, iLen);
+		};
 	}
 
 	static bool HandlePacket(SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
@@ -105,6 +147,12 @@ public:
 	static SendBufferRef MakeSendBuffer(Protocol::S_CHAT& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_CHAT); }
 	static SendBufferRef MakeSendBuffer(Protocol::S_UPDATE_NICKNAME& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_UPDATE_NICKNAME); }
 	static SendBufferRef MakeSendBuffer(Protocol::S_DELETE_ACCOUNT& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_DELETE_ACCOUNT); }
+	static SendBufferRef MakeSendBuffer(Protocol::S_REQUEST_FRIEND& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_REQUEST_FRIEND); }
+	static SendBufferRef MakeSendBuffer(Protocol::S_ACCEPT_FRIEND& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_ACCEPT_FRIEND); }
+	static SendBufferRef MakeSendBuffer(Protocol::S_REJECT_FRIEND& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_REJECT_FRIEND); }
+	static SendBufferRef MakeSendBuffer(Protocol::S_GET_PENDING_FRIENDS& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_GET_PENDING_FRIENDS); }
+	static SendBufferRef MakeSendBuffer(Protocol::S_GET_FRIEND_LIST& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_GET_FRIEND_LIST); }
+	static SendBufferRef MakeSendBuffer(Protocol::S_REMOVE_FRIEND& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_REMOVE_FRIEND); }
 
 private:
 	template<typename PacketType, typename ProcessFunc>

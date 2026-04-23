@@ -107,3 +107,77 @@ message S_DELETE_ACCOUNT
 	bool success = 1;
 	string msg = 2;
 }
+
+// ==========================
+// 친구 추가 관련
+// ==========================
+
+message FriendInfo
+{
+	string email = 1;
+	string nickname = 2;
+}
+
+message C_REQUEST_FRIEND
+{
+	string email = 1;
+}
+
+message S_REQUEST_FRIEND
+{
+	bool success = 1;
+	string msg = 2;
+}
+
+message C_ACCEPT_FRIEND
+{
+	string email = 1;
+}
+
+message S_ACCEPT_FRIEND
+{
+	bool success = 1;
+	string msg = 2;
+}
+
+message C_REJECT_FRIEND
+{
+	string email = 1;
+}
+
+message S_REJECT_FRIEND
+{
+	bool success = 1;
+	string msg = 2;
+}
+
+message C_GET_PENDING_FRIENDS
+{
+}
+
+message S_GET_PENDING_FRIENDS
+{
+	bool success = 1;
+	repeated FriendInfo pendings = 2;
+}
+
+message C_GET_FRIEND_LIST
+{
+}
+
+message S_GET_FRIEND_LIST
+{
+	bool success = 1;
+	repeated FriendInfo friends = 2;
+}
+
+message C_REMOVE_FRIEND
+{
+	string email = 1;
+}
+
+message S_REMOVE_FRIEND
+{
+	bool success = 1;
+	string msg = 2;
+}

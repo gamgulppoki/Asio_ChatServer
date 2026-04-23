@@ -23,7 +23,28 @@ template<> struct Col<User>
     static inline ColumnRef<std::string> Password{"Password"};
 };
 
+template<> inline void describe_entity<Friendship>(EntityBuilder<Friendship>& b)
+{
+    b.field("Id", &Friendship::Id);
+    b.field("FromUserId", &Friendship::FromUserId);
+    b.field("ToUserId", &Friendship::ToUserId);
+    b.field("Status", &Friendship::Status);
+    b.navigation("FromUser", "FromUserId", "User", &Friendship::FromUser);
+    b.navigation("ToUser", "ToUserId", "User", &Friendship::ToUser);
+    b.primary_key("Id");
+    b.table("Friendship");
+}
+
+template<> struct Col<Friendship>
+{
+    static inline ColumnRef<int64> Id{"Id"};
+    static inline ColumnRef<int64> FromUserId{"FromUserId"};
+    static inline ColumnRef<int64> ToUserId{"ToUserId"};
+    static inline ColumnRef<std::string> Status{"Status"};
+};
+
 inline void register_all_generated()
 {
     get_entity_meta<User>();
+    get_entity_meta<Friendship>();
 }

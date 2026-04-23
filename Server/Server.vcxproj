@@ -188,7 +188,9 @@
     <ClInclude Include="DB\ORM\Condition.h" />
     <ClInclude Include="DB\ORM\DBConnection.h" />
     <ClInclude Include="DB\ORM\DBContext.h" />
+    <ClInclude Include="DB\ORM\IncludeEntry.h" />
     <ClInclude Include="DB\ORM\Meta.h" />
+    <ClInclude Include="DB\ORM\Navigation.h" />
     <ClInclude Include="DB\ORM\PrimaryProperty.h" />
     <ClInclude Include="DB\ORM\Property.h" />
     <ClInclude Include="DB\ORM\Sql.h" />
