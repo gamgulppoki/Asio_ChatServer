@@ -16,6 +16,10 @@ enum class ClientState
 	Exit,
 };
 
+// 응답 플래그가 true가 될 때까지 100ms 단위로 폴링. timeout 경과 시 false 반환.
+// 각 루프에서 요청 송신 후 대기하는 공통 패턴을 한 줄로 축약.
+bool WaitForResponse(Atomic<bool>& bDone, int32 iTimeoutMs = 5000);
+
 // 로그인 응답 수신 상태. AuthLoop가 요청 후 대기하고, 수신 핸들러가 세팅한다.
 extern Atomic<bool> GLoginDone;
 extern Atomic<bool> GLoginSuccess;

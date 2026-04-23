@@ -20,6 +20,16 @@ namespace
 	}
 }
 
+// 응답 플래그가 true가 될 때까지 100ms 단위로 폴링. timeout 경과 시 false.
+bool WaitForResponse(Atomic<bool>& bDone, int32 iTimeoutMs)
+{
+	const int32 iStepMs = 100;
+	const int32 iLoops = iTimeoutMs / iStepMs;
+	for (int32 i = 0; i < iLoops && !bDone; ++i)
+		std::this_thread::sleep_for(std::chrono::milliseconds(iStepMs));
+	return bDone.load();
+}
+
 // 전역 싱글톤 바인딩 + 패킷 핸들러 초기화
 ClientApp::ClientApp()
 {
@@ -123,9 +133,7 @@ void ClientApp::AuthLoop()
 			GLoginSuccess = false;
 			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
 
-			// 응답 대기 (최대 5초)
-			for (int32 i = 0; i < 50 && !GLoginDone; ++i)
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			WaitForResponse(GLoginDone);
 
 			if (GLoginSuccess)
 				bLoggedIn = true;
@@ -179,9 +187,7 @@ void ClientApp::LobbyLoop()
 		Pkt.set_roomname(RoomName);
 		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
 
-		// 응답 대기 (최대 5초)
-		for (int32 i = 0; i < 50 && !GCreateRoomDone; ++i)
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		WaitForResponse(GCreateRoomDone);
 
 		if (!GCreateRoomDone)
 		{
@@ -204,9 +210,7 @@ void ClientApp::LobbyLoop()
 		Protocol::C_GET_ROOM_LIST Pkt;
 		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
 
-		// 응답 대기 (최대 5초)
-		for (int32 i = 0; i < 50 && !GRoomListDone; ++i)
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		WaitForResponse(GRoomListDone);
 
 		if (!GRoomListDone)
 		{
@@ -293,9 +297,7 @@ void ClientApp::ChatLoop()
 			Protocol::C_EXIT_ROOM ExitPkt;
 			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(ExitPkt));
 
-			// 응답 대기 (최대 5초)
-			for (int32 i = 0; i < 50 && !GExitRoomDone; ++i)
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			WaitForResponse(GExitRoomDone);
 
 			WaitForEnter();
 			State_ = ClientState::Lobby;
@@ -357,9 +359,7 @@ void ClientApp::MyPageLoop()
 		UpdatePkt.set_newnickname(NewNickname);
 		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(UpdatePkt));
 
-		// 응답 대기 (최대 5초)
-		for (int32 i = 0; i < 50 && !GUpdateNicknameDone; ++i)
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		WaitForResponse(GUpdateNicknameDone);
 
 		// 결과 출력
 		if (!GUpdateNicknameDone)
@@ -395,9 +395,7 @@ void ClientApp::MyPageLoop()
 		Protocol::C_DELETE_ACCOUNT DeletePkt;
 		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(DeletePkt));
 
-		// 응답 대기 (최대 5초)
-		for (int32 i = 0; i < 50 && !GDeleteAccountDone; ++i)
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		WaitForResponse(GDeleteAccountDone);
 
 		// 결과 출력 + 분기
 		if (!GDeleteAccountDone)
@@ -438,8 +436,7 @@ void ClientApp::FriendLoop()
 	Protocol::C_GET_FRIEND_LIST GetListPkt;
 	SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(GetListPkt));
 
-	for (int32 i = 0; i < 50 && !GFriendListDone; ++i)
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	WaitForResponse(GFriendListDone);
 
 	// 2. 목록 출력
 	std::cout << "=== 친구 목록 ===\n";
@@ -497,8 +494,7 @@ void ClientApp::FriendLoop()
 		Pkt.set_email(Email);
 		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
 
-		for (int32 i = 0; i < 50 && !GRequestFriendDone; ++i)
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		WaitForResponse(GRequestFriendDone);
 
 		if (!GRequestFriendDone)
 			std::cout << "서버 응답 없음" << std::endl;
@@ -515,8 +511,7 @@ void ClientApp::FriendLoop()
 		Protocol::C_GET_PENDING_FRIENDS GetPendingPkt;
 		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(GetPendingPkt));
 
-		for (int32 i = 0; i < 50 && !GPendingFriendsDone; ++i)
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		WaitForResponse(GPendingFriendsDone);
 
 		std::cout << "\n=== 받은 친구 요청 ===\n";
 		bool bEmpty = false;
@@ -587,8 +582,7 @@ void ClientApp::FriendLoop()
 				AcceptPkt.set_email(TargetEmail);
 				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(AcceptPkt));
 
-				for (int32 i = 0; i < 50 && !GAcceptFriendDone; ++i)
-					std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				WaitForResponse(GAcceptFriendDone);
 
 				if (!GAcceptFriendDone)
 					std::cout << "서버 응답 없음" << std::endl;
@@ -604,8 +598,7 @@ void ClientApp::FriendLoop()
 				RejectPkt.set_email(TargetEmail);
 				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(RejectPkt));
 
-				for (int32 i = 0; i < 50 && !GRejectFriendDone; ++i)
-					std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				WaitForResponse(GRejectFriendDone);
 
 				if (!GRejectFriendDone)
 					std::cout << "서버 응답 없음" << std::endl;
@@ -636,8 +629,7 @@ void ClientApp::FriendLoop()
 		Pkt.set_email(Email);
 		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
 
-		for (int32 i = 0; i < 50 && !GRemoveFriendDone; ++i)
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		WaitForResponse(GRemoveFriendDone);
 
 		if (!GRemoveFriendDone)
 			std::cout << "서버 응답 없음" << std::endl;
