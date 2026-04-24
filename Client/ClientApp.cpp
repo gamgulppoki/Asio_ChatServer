@@ -43,12 +43,31 @@ namespace
 	// 현재 프롬프트 + 입력 버퍼를 현재 줄에 그린다. 반드시 GChatMutex 보호 안에서만 호출.
 	void RedrawPromptLocked()
 	{
-		// 확성기 모드일 때만 태그를 주황색(ANSI 256색 #208)으로 강조
-		const char* Tag = (GChatMode == ChatMode::Normal)
-			? "[일반]"
-			: "\033[38;5;208m[확성기]\033[0m";
+		// 모드별 태그: 일반=기본색, 확성기=주황(#208), 귓속말=하늘색(#36)
+		const char* Tag = "[일반]";
+		switch (GChatMode)
+		{
+		case ChatMode::Shout:   Tag = "\033[38;5;208m[확성기]\033[0m"; break;
+		case ChatMode::Whisper: Tag = "\033[36m[귓속말]\033[0m";       break;
+		default: break;
+		}
 		std::cout << "\r\033[2K" << Tag << " > "
 		          << StringUtils::WideToUtf8(GChatInput) << std::flush;
+	}
+
+	// "/대상 메시지" 를 파싱. 성공 시 true + OutTarget/OutMessage 채움.
+	bool ParseWhisperInput(const String& Input, String& OutTarget, String& OutMessage)
+	{
+		if (Input.empty() || Input[0] != '/')
+			return false;
+
+		size_t SpaceIdx = Input.find(' ');
+		if (SpaceIdx == String::npos || SpaceIdx == 1)  // 공백 없음 or 슬래시 바로 뒤 공백
+			return false;
+
+		OutTarget  = Input.substr(1, SpaceIdx - 1);
+		OutMessage = Input.substr(SpaceIdx + 1);
+		return !OutMessage.empty();
 	}
 }
 
@@ -185,25 +204,106 @@ void ClientApp::AuthLoop()
 
 void ClientApp::LobbyLoop()
 {
-	// 방 생성 / 로비 입장 / 마이페이지
+	// 로비 상단 메뉴 + 귓속말 토글 입력.
+	// 메뉴 선택은 숫자(1~4), 귓속말 입력은 "/대상 메시지" 형식. Tab 으로 모드 전환.
+	// 서브 입력(방 이름/ID 등)은 기존 std::getline 유지.
+	enum class LobbyMode { Menu, Whisper };
+	LobbyMode Mode = LobbyMode::Menu;
+	std::wstring InputBuf;
+
+	auto RedrawLobby = [&]()
+	{
+		std::cout << "\r\033[2K";
+		if (Mode == LobbyMode::Menu)
+			std::cout << "> " << StringUtils::WideToUtf8(InputBuf) << std::flush;
+		else
+			std::cout << "\033[36m[귓속말]\033[0m > " << StringUtils::WideToUtf8(InputBuf) << std::flush;
+	};
+
 	std::cout << "1. 방 생성\n";
 	std::cout << "2. 방 입장\n";
 	std::cout << "3. 마이페이지\n";
 	std::cout << "4. 친구 목록\n";
-	std::cout << "> ";
-
-	String MenuInput;
-	std::getline(std::cin, MenuInput);
+	std::cout << "(Tab: 메뉴/귓속말 전환, 귓속말 형식: /대상닉네임 메시지)\n";
+	RedrawLobby();
 
 	int32 iMenuChoice = 0;
-	try
+	bool  bMenuSelected = false;
+
+	while (!bMenuSelected)
 	{
-		iMenuChoice = std::stoi(MenuInput);
-	}
-	catch (const std::exception&)
-	{
-		std::cout << "잘못된 입력입니다." << std::endl;
-		return;
+		wint_t ch = _getwch();
+
+		if (ch == L'\t')
+		{
+			Mode = (Mode == LobbyMode::Menu) ? LobbyMode::Whisper : LobbyMode::Menu;
+			InputBuf.clear();
+			RedrawLobby();
+			continue;
+		}
+
+		if (ch == L'\r')
+		{
+			String Input = StringUtils::WideToUtf8(InputBuf);
+			InputBuf.clear();
+			std::cout << "\n";  // 다음 줄로 내림 (지금 타이핑한 줄 확정)
+
+			if (Mode == LobbyMode::Whisper)
+			{
+				String Target, Msg;
+				if (Input.empty())
+				{
+					RedrawLobby();
+					continue;
+				}
+				if (!ParseWhisperInput(Input, Target, Msg))
+				{
+					std::cout << "\033[31m[귓속말] 형식 오류. 사용법: /대상닉네임 메시지\033[0m\n";
+				}
+				else
+				{
+					Protocol::C_WHISPER WhisperPkt;
+					WhisperPkt.set_target_nickname(Target);
+					WhisperPkt.set_message(Msg);
+					SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(WhisperPkt));
+
+					// 로컬 에코 — Lobby 에선 프롬프트 복원 없이 그냥 std::cout
+					std::cout << "\033[36m[귓속말] (" << Target << ") " << Msg << "\033[0m\n";
+				}
+				RedrawLobby();
+				continue;
+			}
+
+			// Menu 모드: 숫자 파싱
+			try
+			{
+				iMenuChoice = std::stoi(Input);
+				bMenuSelected = true;
+				break;
+			}
+			catch (const std::exception&)
+			{
+				std::cout << "잘못된 입력입니다.\n";
+				RedrawLobby();
+				continue;
+			}
+		}
+
+		if (ch == L'\b')
+		{
+			if (!InputBuf.empty())
+			{
+				InputBuf.pop_back();
+				RedrawLobby();
+			}
+			continue;
+		}
+
+		if (ch < 32)
+			continue;
+
+		InputBuf.push_back(static_cast<wchar_t>(ch));
+		RedrawLobby();
 	}
 
 	int32 iTargetRoomId = 0;
@@ -321,7 +421,8 @@ void ClientApp::ChatLoop()
 		GChatMode = ChatMode::Normal;
 		GChatInput.clear();
 		GChatActive = true;
-		std::cout << "Chat mode (Tab: 일반/확성기 토글, Enter: 전송, exit: 나가기)\n";
+		std::cout << "Chat mode (Tab: 일반/확성기/귓속말 순환, Enter: 전송, exit: 나가기)\n";
+		std::cout << "귓속말 형식: /대상닉네임 메시지\n";
 		RedrawPromptLocked();
 	}
 
@@ -332,7 +433,13 @@ void ClientApp::ChatLoop()
 		if (ch == L'\t')
 		{
 			std::lock_guard<std::mutex> Lock(GChatMutex);
-			GChatMode = (GChatMode == ChatMode::Normal) ? ChatMode::Shout : ChatMode::Normal;
+			// Normal → Shout → Whisper → Normal 순환
+			switch (GChatMode)
+			{
+			case ChatMode::Normal:  GChatMode = ChatMode::Shout;   break;
+			case ChatMode::Shout:   GChatMode = ChatMode::Whisper; break;
+			case ChatMode::Whisper: GChatMode = ChatMode::Normal;  break;
+			}
 			RedrawPromptLocked();
 			continue;
 		}
@@ -379,11 +486,30 @@ void ClientApp::ChatLoop()
 				ChatPkt.set_msg(Input);
 				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(ChatPkt));
 			}
-			else
+			else if (CurrentMode == ChatMode::Shout)
 			{
 				Protocol::C_SHOUT ShoutPkt;
 				ShoutPkt.set_msg(Input);
 				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(ShoutPkt));
+			}
+			else // Whisper
+			{
+				String Target, Msg;
+				if (!ParseWhisperInput(Input, Target, Msg))
+				{
+					// 형식 오류 — 하늘색 톤 유지하되 빨강으로 경고
+					PrintChatMessage("\033[31m[귓속말] 형식 오류. 사용법: /대상닉네임 메시지\033[0m");
+				}
+				else
+				{
+					Protocol::C_WHISPER WhisperPkt;
+					WhisperPkt.set_target_nickname(Target);
+					WhisperPkt.set_message(Msg);
+					SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(WhisperPkt));
+
+					// 로컬 에코 — 본인 입력 즉시 화면에 (실패 시 서버 에러가 뒤따라 나옴)
+					PrintChatMessage("\033[36m[귓속말] (" + Target + ") " + Msg + "\033[0m");
+				}
 			}
 
 			continue;

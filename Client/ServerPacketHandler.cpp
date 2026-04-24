@@ -141,6 +141,20 @@ bool Handle_S_SHOUT(SharedPtr<Session> SessionPtr, Protocol::S_SHOUT& Pkt)
 	return true;
 }
 
+// 귓속말 수신. 성공 시 하늘색(#36), 실패 시 빨강(#31).
+// 발신 에코는 클라가 로컬로 처리하므로 서버는 수신자에게만 success=true 를 보냄.
+bool Handle_S_WHISPER(SharedPtr<Session> SessionPtr, Protocol::S_WHISPER& Pkt)
+{
+	if (!Pkt.success())
+	{
+		PrintChatMessage("\033[31m[귓속말] " + Pkt.error_msg() + "\033[0m");
+		return true;
+	}
+
+	PrintChatMessage("\033[36m[귓속말] (" + Pkt.from_name() + ") " + Pkt.message() + "\033[0m");
+	return true;
+}
+
 // 닉네임 변경 결과를 수신한다.
 bool Handle_S_UPDATE_NICKNAME(SharedPtr<Session> SessionPtr, Protocol::S_UPDATE_NICKNAME& Pkt)
 {

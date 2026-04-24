@@ -118,6 +118,10 @@ class C_UPDATE_NICKNAME;
 struct C_UPDATE_NICKNAMEDefaultTypeInternal;
 extern C_UPDATE_NICKNAMEDefaultTypeInternal _C_UPDATE_NICKNAME_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull C_UPDATE_NICKNAME_class_data_;
+class C_WHISPER;
+struct C_WHISPERDefaultTypeInternal;
+extern C_WHISPERDefaultTypeInternal _C_WHISPER_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull C_WHISPER_class_data_;
 class FriendInfo;
 struct FriendInfoDefaultTypeInternal;
 extern FriendInfoDefaultTypeInternal _FriendInfo_default_instance_;
@@ -190,6 +194,10 @@ class S_UPDATE_NICKNAME;
 struct S_UPDATE_NICKNAMEDefaultTypeInternal;
 extern S_UPDATE_NICKNAMEDefaultTypeInternal _S_UPDATE_NICKNAME_default_instance_;
 extern const ::google::protobuf::internal::ClassDataFull S_UPDATE_NICKNAME_class_data_;
+class S_WHISPER;
+struct S_WHISPERDefaultTypeInternal;
+extern S_WHISPERDefaultTypeInternal _S_WHISPER_default_instance_;
+extern const ::google::protobuf::internal::ClassDataFull S_WHISPER_class_data_;
 }  // namespace Protocol
 namespace google {
 namespace protobuf {
@@ -201,6 +209,264 @@ namespace Protocol {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class S_WHISPER final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Protocol.S_WHISPER) */ {
+ public:
+  inline S_WHISPER() : S_WHISPER(nullptr) {}
+  ~S_WHISPER() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(S_WHISPER* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(S_WHISPER));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR S_WHISPER(::google::protobuf::internal::ConstantInitialized);
+
+  inline S_WHISPER(const S_WHISPER& from) : S_WHISPER(nullptr, from) {}
+  inline S_WHISPER(S_WHISPER&& from) noexcept
+      : S_WHISPER(nullptr, ::std::move(from)) {}
+  inline S_WHISPER& operator=(const S_WHISPER& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline S_WHISPER& operator=(S_WHISPER&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const S_WHISPER& default_instance() {
+    return *reinterpret_cast<const S_WHISPER*>(
+        &_S_WHISPER_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 22;
+  friend void swap(S_WHISPER& a, S_WHISPER& b) { a.Swap(&b); }
+  inline void Swap(S_WHISPER* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(S_WHISPER* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  S_WHISPER* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<S_WHISPER>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const S_WHISPER& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const S_WHISPER& from) { S_WHISPER::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(S_WHISPER* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Protocol.S_WHISPER"; }
+
+  explicit S_WHISPER(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  S_WHISPER(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const S_WHISPER& from);
+  S_WHISPER(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, S_WHISPER&& from) noexcept
+      : S_WHISPER(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kFromNameFieldNumber = 1,
+    kToNameFieldNumber = 2,
+    kMessageFieldNumber = 3,
+    kErrorMsgFieldNumber = 5,
+    kSuccessFieldNumber = 4,
+  };
+  // string from_name = 1;
+  void clear_from_name() ;
+  const ::std::string& from_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_from_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_from_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_from_name();
+  void set_allocated_from_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_from_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_from_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_from_name();
+
+  public:
+  // string to_name = 2;
+  void clear_to_name() ;
+  const ::std::string& to_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_to_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_to_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_to_name();
+  void set_allocated_to_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_to_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_to_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_to_name();
+
+  public:
+  // string message = 3;
+  void clear_message() ;
+  const ::std::string& message() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_message(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_message();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_message();
+  void set_allocated_message(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_message() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_message(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_message();
+
+  public:
+  // string error_msg = 5;
+  void clear_error_msg() ;
+  const ::std::string& error_msg() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_error_msg(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_error_msg();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_error_msg();
+  void set_allocated_error_msg(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_error_msg() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_error_msg(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_error_msg();
+
+  public:
+  // bool success = 4;
+  void clear_success() ;
+  bool success() const;
+  void set_success(bool value);
+
+  private:
+  bool _internal_success() const;
+  void _internal_set_success(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Protocol.S_WHISPER)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<3, 5,
+                                   0, 59,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const S_WHISPER& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr from_name_;
+    ::google::protobuf::internal::ArenaStringPtr to_name_;
+    ::google::protobuf::internal::ArenaStringPtr message_;
+    ::google::protobuf::internal::ArenaStringPtr error_msg_;
+    bool success_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_Protocol_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull S_WHISPER_class_data_;
 // -------------------------------------------------------------------
 
 class S_UPDATE_NICKNAME final : public ::google::protobuf::Message
@@ -677,7 +943,7 @@ class S_REQUEST_FRIEND final : public ::google::protobuf::Message
     return *reinterpret_cast<const S_REQUEST_FRIEND*>(
         &_S_REQUEST_FRIEND_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(S_REQUEST_FRIEND& a, S_REQUEST_FRIEND& b) { a.Swap(&b); }
   inline void Swap(S_REQUEST_FRIEND* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -884,7 +1150,7 @@ class S_REMOVE_FRIEND final : public ::google::protobuf::Message
     return *reinterpret_cast<const S_REMOVE_FRIEND*>(
         &_S_REMOVE_FRIEND_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(S_REMOVE_FRIEND& a, S_REMOVE_FRIEND& b) { a.Swap(&b); }
   inline void Swap(S_REMOVE_FRIEND* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1091,7 +1357,7 @@ class S_REJECT_FRIEND final : public ::google::protobuf::Message
     return *reinterpret_cast<const S_REJECT_FRIEND*>(
         &_S_REJECT_FRIEND_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(S_REJECT_FRIEND& a, S_REJECT_FRIEND& b) { a.Swap(&b); }
   inline void Swap(S_REJECT_FRIEND* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2742,7 +3008,7 @@ class S_ACCEPT_FRIEND final : public ::google::protobuf::Message
     return *reinterpret_cast<const S_ACCEPT_FRIEND*>(
         &_S_ACCEPT_FRIEND_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(S_ACCEPT_FRIEND& a, S_ACCEPT_FRIEND& b) { a.Swap(&b); }
   inline void Swap(S_ACCEPT_FRIEND* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3156,7 +3422,7 @@ class FriendInfo final : public ::google::protobuf::Message
     return *reinterpret_cast<const FriendInfo*>(
         &_FriendInfo_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(FriendInfo& a, FriendInfo& b) { a.Swap(&b); }
   inline void Swap(FriendInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3323,6 +3589,218 @@ class FriendInfo final : public ::google::protobuf::Message
 };
 
 extern const ::google::protobuf::internal::ClassDataFull FriendInfo_class_data_;
+// -------------------------------------------------------------------
+
+class C_WHISPER final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Protocol.C_WHISPER) */ {
+ public:
+  inline C_WHISPER() : C_WHISPER(nullptr) {}
+  ~C_WHISPER() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(C_WHISPER* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(C_WHISPER));
+  }
+#endif
+
+  template <typename = void>
+  explicit PROTOBUF_CONSTEXPR C_WHISPER(::google::protobuf::internal::ConstantInitialized);
+
+  inline C_WHISPER(const C_WHISPER& from) : C_WHISPER(nullptr, from) {}
+  inline C_WHISPER(C_WHISPER&& from) noexcept
+      : C_WHISPER(nullptr, ::std::move(from)) {}
+  inline C_WHISPER& operator=(const C_WHISPER& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline C_WHISPER& operator=(C_WHISPER&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL mutable_unknown_fields()
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const C_WHISPER& default_instance() {
+    return *reinterpret_cast<const C_WHISPER*>(
+        &_C_WHISPER_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages = 21;
+  friend void swap(C_WHISPER& a, C_WHISPER& b) { a.Swap(&b); }
+  inline void Swap(C_WHISPER* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(C_WHISPER* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  C_WHISPER* PROTOBUF_NONNULL New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<C_WHISPER>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const C_WHISPER& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const C_WHISPER& from) { C_WHISPER::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  ::size_t ByteSizeLong() const final;
+  ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  int GetCachedSize() const { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(C_WHISPER* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Protocol.C_WHISPER"; }
+
+  explicit C_WHISPER(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  C_WHISPER(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const C_WHISPER& from);
+  C_WHISPER(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, C_WHISPER&& from) noexcept
+      : C_WHISPER(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_();
+
+  ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTargetNicknameFieldNumber = 1,
+    kMessageFieldNumber = 2,
+  };
+  // string target_nickname = 1;
+  void clear_target_nickname() ;
+  const ::std::string& target_nickname() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_target_nickname(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_target_nickname();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_target_nickname();
+  void set_allocated_target_nickname(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_target_nickname() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_target_nickname(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_target_nickname();
+
+  public:
+  // string message = 2;
+  void clear_message() ;
+  const ::std::string& message() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_message(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_message();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_message();
+  void set_allocated_message(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_message() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_message(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_message();
+
+  public:
+  // @@protoc_insertion_point(class_scope:Protocol.C_WHISPER)
+ private:
+  class _Internal;
+  friend class ::google::protobuf::internal::TcParser;
+  static const ::google::protobuf::internal::TcParseTable<1, 2,
+                                   0, 49,
+                                   2>
+      _table_;
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const C_WHISPER& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr target_nickname_;
+    ::google::protobuf::internal::ArenaStringPtr message_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_Protocol_2eproto;
+};
+
+extern const ::google::protobuf::internal::ClassDataFull C_WHISPER_class_data_;
 // -------------------------------------------------------------------
 
 class C_UPDATE_NICKNAME final : public ::google::protobuf::Message
@@ -3770,7 +4248,7 @@ class C_REQUEST_FRIEND final : public ::google::protobuf::Message
     return *reinterpret_cast<const C_REQUEST_FRIEND*>(
         &_C_REQUEST_FRIEND_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(C_REQUEST_FRIEND& a, C_REQUEST_FRIEND& b) { a.Swap(&b); }
   inline void Swap(C_REQUEST_FRIEND* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3965,7 +4443,7 @@ class C_REMOVE_FRIEND final : public ::google::protobuf::Message
     return *reinterpret_cast<const C_REMOVE_FRIEND*>(
         &_C_REMOVE_FRIEND_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 32;
+  static constexpr int kIndexInFileMessages = 34;
   friend void swap(C_REMOVE_FRIEND& a, C_REMOVE_FRIEND& b) { a.Swap(&b); }
   inline void Swap(C_REMOVE_FRIEND* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4160,7 +4638,7 @@ class C_REJECT_FRIEND final : public ::google::protobuf::Message
     return *reinterpret_cast<const C_REJECT_FRIEND*>(
         &_C_REJECT_FRIEND_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(C_REJECT_FRIEND& a, C_REJECT_FRIEND& b) { a.Swap(&b); }
   inline void Swap(C_REJECT_FRIEND* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4929,7 +5407,7 @@ class C_GET_PENDING_FRIENDS final : public ::google::protobuf::internal::ZeroFie
     return *reinterpret_cast<const C_GET_PENDING_FRIENDS*>(
         &_C_GET_PENDING_FRIENDS_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(C_GET_PENDING_FRIENDS& a, C_GET_PENDING_FRIENDS& b) { a.Swap(&b); }
   inline void Swap(C_GET_PENDING_FRIENDS* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5063,7 +5541,7 @@ class C_GET_FRIEND_LIST final : public ::google::protobuf::internal::ZeroFieldsB
     return *reinterpret_cast<const C_GET_FRIEND_LIST*>(
         &_C_GET_FRIEND_LIST_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(C_GET_FRIEND_LIST& a, C_GET_FRIEND_LIST& b) { a.Swap(&b); }
   inline void Swap(C_GET_FRIEND_LIST* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6102,7 +6580,7 @@ class C_ACCEPT_FRIEND final : public ::google::protobuf::Message
     return *reinterpret_cast<const C_ACCEPT_FRIEND*>(
         &_C_ACCEPT_FRIEND_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(C_ACCEPT_FRIEND& a, C_ACCEPT_FRIEND& b) { a.Swap(&b); }
   inline void Swap(C_ACCEPT_FRIEND* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6506,7 +6984,7 @@ class S_GET_PENDING_FRIENDS final : public ::google::protobuf::Message
     return *reinterpret_cast<const S_GET_PENDING_FRIENDS*>(
         &_S_GET_PENDING_FRIENDS_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(S_GET_PENDING_FRIENDS& a, S_GET_PENDING_FRIENDS& b) { a.Swap(&b); }
   inline void Swap(S_GET_PENDING_FRIENDS* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6715,7 +7193,7 @@ class S_GET_FRIEND_LIST final : public ::google::protobuf::Message
     return *reinterpret_cast<const S_GET_FRIEND_LIST*>(
         &_S_GET_FRIEND_LIST_default_instance_);
   }
-  static constexpr int kIndexInFileMessages = 31;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(S_GET_FRIEND_LIST& a, S_GET_FRIEND_LIST& b) { a.Swap(&b); }
   inline void Swap(S_GET_FRIEND_LIST* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8578,6 +9056,429 @@ inline void S_SHOUT::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) 
     _impl_.name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:Protocol.S_SHOUT.name)
+}
+
+// -------------------------------------------------------------------
+
+// C_WHISPER
+
+// string target_nickname = 1;
+inline void C_WHISPER::clear_target_nickname() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_nickname_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& C_WHISPER::target_nickname() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Protocol.C_WHISPER.target_nickname)
+  return _internal_target_nickname();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void C_WHISPER::set_target_nickname(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.target_nickname_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Protocol.C_WHISPER.target_nickname)
+}
+inline ::std::string* PROTOBUF_NONNULL C_WHISPER::mutable_target_nickname()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_target_nickname();
+  // @@protoc_insertion_point(field_mutable:Protocol.C_WHISPER.target_nickname)
+  return _s;
+}
+inline const ::std::string& C_WHISPER::_internal_target_nickname() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_nickname_.Get();
+}
+inline void C_WHISPER::_internal_set_target_nickname(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_nickname_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL C_WHISPER::_internal_mutable_target_nickname() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_nickname_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE C_WHISPER::release_target_nickname() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Protocol.C_WHISPER.target_nickname)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.target_nickname_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.target_nickname_.Set("", GetArena());
+  }
+  return released;
+}
+inline void C_WHISPER::set_allocated_target_nickname(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.target_nickname_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.target_nickname_.IsDefault()) {
+    _impl_.target_nickname_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Protocol.C_WHISPER.target_nickname)
+}
+
+// string message = 2;
+inline void C_WHISPER::clear_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.message_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& C_WHISPER::message() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Protocol.C_WHISPER.message)
+  return _internal_message();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void C_WHISPER::set_message(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.message_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Protocol.C_WHISPER.message)
+}
+inline ::std::string* PROTOBUF_NONNULL C_WHISPER::mutable_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_message();
+  // @@protoc_insertion_point(field_mutable:Protocol.C_WHISPER.message)
+  return _s;
+}
+inline const ::std::string& C_WHISPER::_internal_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.message_.Get();
+}
+inline void C_WHISPER::_internal_set_message(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.message_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL C_WHISPER::_internal_mutable_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.message_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE C_WHISPER::release_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Protocol.C_WHISPER.message)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.message_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.message_.Set("", GetArena());
+  }
+  return released;
+}
+inline void C_WHISPER::set_allocated_message(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.message_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.message_.IsDefault()) {
+    _impl_.message_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Protocol.C_WHISPER.message)
+}
+
+// -------------------------------------------------------------------
+
+// S_WHISPER
+
+// string from_name = 1;
+inline void S_WHISPER::clear_from_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.from_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000001U);
+}
+inline const ::std::string& S_WHISPER::from_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Protocol.S_WHISPER.from_name)
+  return _internal_from_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void S_WHISPER::set_from_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.from_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Protocol.S_WHISPER.from_name)
+}
+inline ::std::string* PROTOBUF_NONNULL S_WHISPER::mutable_from_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_from_name();
+  // @@protoc_insertion_point(field_mutable:Protocol.S_WHISPER.from_name)
+  return _s;
+}
+inline const ::std::string& S_WHISPER::_internal_from_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.from_name_.Get();
+}
+inline void S_WHISPER::_internal_set_from_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.from_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL S_WHISPER::_internal_mutable_from_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.from_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE S_WHISPER::release_from_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Protocol.S_WHISPER.from_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.from_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.from_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void S_WHISPER::set_allocated_from_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.from_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.from_name_.IsDefault()) {
+    _impl_.from_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Protocol.S_WHISPER.from_name)
+}
+
+// string to_name = 2;
+inline void S_WHISPER::clear_to_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.to_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000002U);
+}
+inline const ::std::string& S_WHISPER::to_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Protocol.S_WHISPER.to_name)
+  return _internal_to_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void S_WHISPER::set_to_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.to_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Protocol.S_WHISPER.to_name)
+}
+inline ::std::string* PROTOBUF_NONNULL S_WHISPER::mutable_to_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_to_name();
+  // @@protoc_insertion_point(field_mutable:Protocol.S_WHISPER.to_name)
+  return _s;
+}
+inline const ::std::string& S_WHISPER::_internal_to_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.to_name_.Get();
+}
+inline void S_WHISPER::_internal_set_to_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.to_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL S_WHISPER::_internal_mutable_to_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.to_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE S_WHISPER::release_to_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Protocol.S_WHISPER.to_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.to_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.to_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void S_WHISPER::set_allocated_to_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.to_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.to_name_.IsDefault()) {
+    _impl_.to_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Protocol.S_WHISPER.to_name)
+}
+
+// string message = 3;
+inline void S_WHISPER::clear_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.message_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline const ::std::string& S_WHISPER::message() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Protocol.S_WHISPER.message)
+  return _internal_message();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void S_WHISPER::set_message(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.message_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Protocol.S_WHISPER.message)
+}
+inline ::std::string* PROTOBUF_NONNULL S_WHISPER::mutable_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_message();
+  // @@protoc_insertion_point(field_mutable:Protocol.S_WHISPER.message)
+  return _s;
+}
+inline const ::std::string& S_WHISPER::_internal_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.message_.Get();
+}
+inline void S_WHISPER::_internal_set_message(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.message_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL S_WHISPER::_internal_mutable_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.message_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE S_WHISPER::release_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Protocol.S_WHISPER.message)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.message_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.message_.Set("", GetArena());
+  }
+  return released;
+}
+inline void S_WHISPER::set_allocated_message(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.message_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.message_.IsDefault()) {
+    _impl_.message_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Protocol.S_WHISPER.message)
+}
+
+// bool success = 4;
+inline void S_WHISPER::clear_success() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.success_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000010U);
+}
+inline bool S_WHISPER::success() const {
+  // @@protoc_insertion_point(field_get:Protocol.S_WHISPER.success)
+  return _internal_success();
+}
+inline void S_WHISPER::set_success(bool value) {
+  _internal_set_success(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:Protocol.S_WHISPER.success)
+}
+inline bool S_WHISPER::_internal_success() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.success_;
+}
+inline void S_WHISPER::_internal_set_success(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.success_ = value;
+}
+
+// string error_msg = 5;
+inline void S_WHISPER::clear_error_msg() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.error_msg_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000008U);
+}
+inline const ::std::string& S_WHISPER::error_msg() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:Protocol.S_WHISPER.error_msg)
+  return _internal_error_msg();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void S_WHISPER::set_error_msg(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.error_msg_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:Protocol.S_WHISPER.error_msg)
+}
+inline ::std::string* PROTOBUF_NONNULL S_WHISPER::mutable_error_msg()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_error_msg();
+  // @@protoc_insertion_point(field_mutable:Protocol.S_WHISPER.error_msg)
+  return _s;
+}
+inline const ::std::string& S_WHISPER::_internal_error_msg() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.error_msg_.Get();
+}
+inline void S_WHISPER::_internal_set_error_msg(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.error_msg_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL S_WHISPER::_internal_mutable_error_msg() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.error_msg_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE S_WHISPER::release_error_msg() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:Protocol.S_WHISPER.error_msg)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.error_msg_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.error_msg_.Set("", GetArena());
+  }
+  return released;
+}
+inline void S_WHISPER::set_allocated_error_msg(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.error_msg_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.error_msg_.IsDefault()) {
+    _impl_.error_msg_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:Protocol.S_WHISPER.error_msg)
 }
 
 // -------------------------------------------------------------------

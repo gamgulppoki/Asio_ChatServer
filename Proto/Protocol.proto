@@ -123,6 +123,21 @@ message S_SHOUT
 	string name = 2;
 }
 
+message C_WHISPER
+{
+	string target_nickname = 1;
+	string message = 2;
+}
+
+message S_WHISPER
+{
+	string from_name = 1;
+	string to_name = 2;
+	string message = 3;
+	bool success = 4;
+	string error_msg = 5;
+}
+
 // ==========================
 // 친구 추가 관련
 // ==========================

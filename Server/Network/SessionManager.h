@@ -18,6 +18,9 @@ public:
     void Clear();
     
     bool IsOnline(uint64 playerId);
+    
+    uint64 GetPlayerId(std::string playerName);
+    SharedPtr<Session> GetSession(uint64 playerId);
 
 private:
     std::shared_mutex Lock;

@@ -58,6 +58,16 @@ bool Handle_C_REGISTER(SharedPtr<Session> SessionPtr, Protocol::C_REGISTER& Pkt)
 		return true;
 	}
 
+	// 닉네임 중복 확인 (DB UNIQUE 제약 대신 핸들러 단에서 처리)
+	auto ExistingNickname = dbContext.Set<User>().Where(Col<User>::Nickname == Pkt.name()).ToList();
+	if (!ExistingNickname.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Nickname already taken");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
 	// User 구조체 채우기
 	newUserPtr->Nickname = Pkt.name();
 	newUserPtr->Email = Pkt.email();
@@ -298,6 +308,44 @@ bool Handle_C_SHOUT(SharedPtr<Session> SessionPtr, Protocol::C_SHOUT& Pkt)
 		RoomManager->Broadcast(Buffer);
 	}
 	
+	return true;
+}
+
+bool Handle_C_WHISPER(SharedPtr<Session> SessionPtr, Protocol::C_WHISPER& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+
+	// 대상 조회 (닉네임 → PlayerId → Session)
+	uint64 targetId = GSessionManager->GetPlayerId(Pkt.target_nickname());
+	auto   targetSession = GSessionManager->GetSession(targetId);
+
+	// 상대가 없거나 오프라인
+	if (!targetSession)
+	{
+		Protocol::S_WHISPER ErrPkt;
+		ErrPkt.set_success(false);
+		ErrPkt.set_error_msg("상대를 찾을 수 없거나 오프라인입니다.");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ErrPkt));
+		return true;
+	}
+
+	// 자기 자신에게는 차단
+	if (targetId == GameSessionPtr->GetPlayerInfo().PlayerId)
+	{
+		Protocol::S_WHISPER ErrPkt;
+		ErrPkt.set_success(false);
+		ErrPkt.set_error_msg("자기 자신에게는 보낼 수 없습니다.");
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ErrPkt));
+		return true;
+	}
+
+	// 수신자에게만 송신. 발신자는 클라에서 로컬 에코하므로 서버 에코 불필요.
+	Protocol::S_WHISPER OkPkt;
+	OkPkt.set_success(true);
+	OkPkt.set_from_name(StringUtils::WideToUtf8(GameSessionPtr->GetPlayerInfo().Nickname));
+	OkPkt.set_message(Pkt.message());
+	targetSession->Send(ClientPacketHandler::MakeSendBuffer(OkPkt));
+
 	return true;
 }
 
