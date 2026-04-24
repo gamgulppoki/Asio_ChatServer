@@ -15,7 +15,7 @@ public:
 	void Execute();
 
 private:
-	USE_LOCK;
+	std::mutex Mutex;
 	Queue<JobRef> Jobs;
 	Atomic<int32> iJobCount = 0;
 };

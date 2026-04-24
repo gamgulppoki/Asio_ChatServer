@@ -102,7 +102,7 @@ SendBufferRef SendBufferManager::Open(uint32 iSize)
 SendBufferChunkRef SendBufferManager::Pop()
 {
 	{
-		WRITE_LOCK;
+		std::lock_guard<std::mutex> Lock(Mutex_);
 		if (ChunkPool.empty() == false)
 		{
 			SendBufferChunkRef Chunk = ChunkPool.back();
@@ -117,7 +117,7 @@ SendBufferChunkRef SendBufferManager::Pop()
 // Chunk를 풀에 반납한다.
 void SendBufferManager::Push(SendBufferChunkRef Buffer)
 {
-	WRITE_LOCK;
+	std::lock_guard<std::mutex> Lock(Mutex_);
 	ChunkPool.push_back(Buffer);
 }
 

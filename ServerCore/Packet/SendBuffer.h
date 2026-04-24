@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Types.h"
-#include "Lock.h"
+#include <mutex>
 
 class SendBufferChunk;
 
@@ -67,6 +67,6 @@ private:
 	void Push(SendBufferChunkRef Buffer);
 	void PushGlobal(SendBufferChunk* Buffer);
 
-	USE_LOCK;
+	std::mutex Mutex_;
 	Vector<SendBufferChunkRef> ChunkPool;
 };

@@ -11,7 +11,7 @@ void JobQueue::Push(Function<void()> Callback)
 	const int32 iPrevCount = iJobCount.fetch_add(1);
 
 	{
-		WRITE_LOCK;
+		std::lock_guard<std::mutex> Lock(Mutex);
 		Jobs.push(std::move(NewJob));
 	}
 
@@ -36,7 +36,7 @@ void JobQueue::Execute()
 		Vector<JobRef> CurrentJobs;
 
 		{
-			WRITE_LOCK;
+			std::lock_guard<std::mutex> Lock(Mutex);
 			while (Jobs.empty() == false)
 			{
 				CurrentJobs.push_back(std::move(Jobs.front()));
