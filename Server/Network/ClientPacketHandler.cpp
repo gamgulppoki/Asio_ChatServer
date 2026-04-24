@@ -269,12 +269,33 @@ bool Handle_C_CHAT(SharedPtr<Session> SessionPtr, Protocol::C_CHAT& Pkt)
 	auto RoomPtr = GameSessionPtr->GetRoom();
 	if (RoomPtr)
 	{
-		RoomPtr->Push([RoomPtr, Buffer, GameSessionPtr]()
+		RoomPtr->Push([RoomPtr, Buffer]()
 		{
-			RoomPtr->Broadcast(Buffer, GameSessionPtr);
+			RoomPtr->Broadcast(Buffer);
 		});
 	}
 
+	return true;
+}
+
+// 확성기 요청을 처리한다. 모든 방에 S_SHOUT 브로드캐스트.
+bool Handle_C_SHOUT(SharedPtr<Session> SessionPtr, Protocol::C_SHOUT& Pkt)
+{
+	// TODO: RoomManager 스냅샷 순회 + 각 방 JobQueue에 broadcast job push
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+
+	Protocol::S_SHOUT ShoutPkt;
+	ShoutPkt.set_msg(Pkt.msg());
+	ShoutPkt.set_name(StringUtils::WideToUtf8(GameSessionPtr->GetPlayerInfo().Nickname));
+
+	SendBufferRef Buffer = ClientPacketHandler::MakeSendBuffer(ShoutPkt);
+
+	auto RoomManager = GRoomManager;
+	if (RoomManager)
+	{
+		RoomManager->Broadcast(Buffer);
+	}
+	
 	return true;
 }
 

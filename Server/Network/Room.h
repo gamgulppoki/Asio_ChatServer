@@ -15,7 +15,7 @@ public:
 	// [계약] 아래 3개는 반드시 Push() 람다 안에서 호출. 직접 호출 금지 (Sessions 자료구조 race 방지).
 	void Enter(SharedPtr<GameSession> SessionPtr);
 	void Leave(SharedPtr<GameSession> SessionPtr);
-	void Broadcast(SendBufferRef Buffer, SharedPtr<GameSession> Sender);
+	void Broadcast(SendBufferRef Buffer);
 
 	uint32 GetRoomId() const { return RoomId; }
 	const WString& GetRoomName() const { return RoomName; }

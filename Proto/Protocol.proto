@@ -76,17 +76,6 @@ message S_EXIT_ROOM
 	int32 success = 1;
 }
 
-message C_CHAT
-{
-	string msg = 1;
-}
-
-message S_CHAT
-{
-	string msg = 1;
-	string name = 2;
-}
-
 message C_UPDATE_NICKNAME
 {
 	string newNickname = 1;
@@ -106,6 +95,32 @@ message S_DELETE_ACCOUNT
 {
 	bool success = 1;
 	string msg = 2;
+}
+
+// ==========================
+// 채팅 관련
+// ==========================
+
+message C_CHAT
+{
+	string msg = 1;
+}
+
+message S_CHAT
+{
+	string msg = 1;
+	string name = 2;
+}
+
+message C_SHOUT
+{
+	string msg = 1;
+}
+
+message S_SHOUT
+{
+	string msg = 1;
+	string name = 2;
 }
 
 // ==========================

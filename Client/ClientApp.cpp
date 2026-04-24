@@ -1,10 +1,12 @@
 ﻿#include "ClientApp.h"
 #include "CoreGlobal.h"
 #include "ServerPacketHandler.h"
+#include "StringUtils.h"
 #include <spdlog/spdlog.h>
 #include <iostream>
 #include <thread>
 #include <cstdlib>
+#include <conio.h>
 
 const int32 iPort = 9000;
 
@@ -28,6 +30,42 @@ bool WaitForResponse(Atomic<bool>& bDone, int32 iTimeoutMs)
 	for (int32 i = 0; i < iLoops && !bDone; ++i)
 		std::this_thread::sleep_for(std::chrono::milliseconds(iStepMs));
 	return bDone.load();
+}
+
+// 채팅 입력 상태 전역. ClientApp.h 선언의 정의부.
+std::mutex   GChatMutex;
+bool         GChatActive = false;
+ChatMode     GChatMode   = ChatMode::Normal;
+std::wstring GChatInput;
+
+namespace
+{
+	// 현재 프롬프트 + 입력 버퍼를 현재 줄에 그린다. 반드시 GChatMutex 보호 안에서만 호출.
+	void RedrawPromptLocked()
+	{
+		// 확성기 모드일 때만 태그를 주황색(ANSI 256색 #208)으로 강조
+		const char* Tag = (GChatMode == ChatMode::Normal)
+			? "[일반]"
+			: "\033[38;5;208m[확성기]\033[0m";
+		std::cout << "\r\033[2K" << Tag << " > "
+		          << StringUtils::WideToUtf8(GChatInput) << std::flush;
+	}
+}
+
+// 브로드캐스트 메시지 출력. ChatLoop 중이면 프롬프트를 잠깐 지웠다가 메시지 찍고 프롬프트 재출력.
+// mutex 덕분에 입력 스레드의 Redraw와 섞이지 않는다.
+void PrintChatMessage(const String& Line)
+{
+	std::lock_guard<std::mutex> Lock(GChatMutex);
+	if (GChatActive)
+	{
+		std::cout << "\r\033[2K" << Line << "\n";
+		RedrawPromptLocked();
+	}
+	else
+	{
+		std::cout << Line << "\n" << std::flush;
+	}
 }
 
 // 전역 싱글톤 바인딩 + 패킷 핸들러 초기화
@@ -277,39 +315,107 @@ void ClientApp::LobbyLoop()
 // 방 입장 + 채팅 루프
 void ClientApp::ChatLoop()
 {
-	// 채팅 모드
-	std::cout << "Chat mode (type message and press Enter):" << std::endl;
-	String Input;
-	while (std::getline(std::cin, Input))
+	// 진입 시 상태 초기화 + 활성화. 이후 IO 스레드의 PrintChatMessage가 프롬프트를 유지해준다.
 	{
-		// 방금 입력한 줄을 지워서 서버 브로드캐스트 "[name] msg" 포맷만 남기기
-		// (ANSI: 커서 한 줄 위로 + 해당 줄 전체 지움)
-		std::cout << "\033[1A\033[2K" << std::flush;
-
-		if (Input.empty())
-			continue;
-
-		// 퇴장
-		if (Input == "exit")
-		{
-			GExitRoomDone = false;
-
-			Protocol::C_EXIT_ROOM ExitPkt;
-			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(ExitPkt));
-
-			WaitForResponse(GExitRoomDone);
-
-			WaitForEnter();
-			State_ = ClientState::Lobby;
-			return;
-		}
-
-		Protocol::C_CHAT ChatPkt;
-		ChatPkt.set_msg(Input);
-		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(ChatPkt));
+		std::lock_guard<std::mutex> Lock(GChatMutex);
+		GChatMode = ChatMode::Normal;
+		GChatInput.clear();
+		GChatActive = true;
+		std::cout << "Chat mode (Tab: 일반/확성기 토글, Enter: 전송, exit: 나가기)\n";
+		RedrawPromptLocked();
 	}
 
-	// 채팅 루프 종료 시 로비로 복귀. 종료 조건(퇴장 명령어 등)은 세부 로직에서 추가.
+	while (true)
+	{
+		wint_t ch = _getwch();
+
+		if (ch == L'\t')
+		{
+			std::lock_guard<std::mutex> Lock(GChatMutex);
+			GChatMode = (GChatMode == ChatMode::Normal) ? ChatMode::Shout : ChatMode::Normal;
+			RedrawPromptLocked();
+			continue;
+		}
+
+		if (ch == L'\r')
+		{
+			String Input;
+			ChatMode CurrentMode;
+			{
+				std::lock_guard<std::mutex> Lock(GChatMutex);
+				Input = StringUtils::WideToUtf8(GChatInput);
+				GChatInput.clear();
+				CurrentMode = GChatMode;
+				// 입력을 비우고 프롬프트만 남긴 상태로 재출력 (항상 맨 아래 한 줄 유지)
+				RedrawPromptLocked();
+			}
+
+			if (Input.empty())
+				continue;
+
+			if (Input == "exit")
+			{
+				{
+					std::lock_guard<std::mutex> Lock(GChatMutex);
+					GChatActive = false;
+					std::cout << "\n" << std::flush;
+				}
+
+				GExitRoomDone = false;
+
+				Protocol::C_EXIT_ROOM ExitPkt;
+				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(ExitPkt));
+
+				WaitForResponse(GExitRoomDone);
+
+				WaitForEnter();
+				State_ = ClientState::Lobby;
+				return;
+			}
+
+			if (CurrentMode == ChatMode::Normal)
+			{
+				Protocol::C_CHAT ChatPkt;
+				ChatPkt.set_msg(Input);
+				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(ChatPkt));
+			}
+			else
+			{
+				Protocol::C_SHOUT ShoutPkt;
+				ShoutPkt.set_msg(Input);
+				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(ShoutPkt));
+			}
+
+			continue;
+		}
+
+		if (ch == L'\b')
+		{
+			std::lock_guard<std::mutex> Lock(GChatMutex);
+			if (!GChatInput.empty())
+			{
+				GChatInput.pop_back();
+				RedrawPromptLocked();
+			}
+			continue;
+		}
+
+		// 그 외 제어 문자(화살표, F키 등)는 무시
+		if (ch < 32)
+			continue;
+
+		{
+			std::lock_guard<std::mutex> Lock(GChatMutex);
+			GChatInput.push_back(static_cast<wchar_t>(ch));
+			RedrawPromptLocked();
+		}
+	}
+
+	// 도달 불가 (exit 분기에서 return). 방어용.
+	{
+		std::lock_guard<std::mutex> Lock(GChatMutex);
+		GChatActive = false;
+	}
 	State_ = ClientState::Lobby;
 }
 

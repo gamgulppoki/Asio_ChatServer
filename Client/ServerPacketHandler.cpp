@@ -130,7 +130,14 @@ bool Handle_S_ENTER_ROOM(SharedPtr<Session> SessionPtr, Protocol::S_ENTER_ROOM& 
 // 서버로부터 채팅 메시지를 수신하여 출력한다.
 bool Handle_S_CHAT(SharedPtr<Session> SessionPtr, Protocol::S_CHAT& Pkt)
 {
-	std::cout << "[" << Pkt.name() << "] " << Pkt.msg() << std::endl;
+	PrintChatMessage("[" + Pkt.name() + "] " + Pkt.msg());
+	return true;
+}
+
+// 서버로부터 확성기 메시지를 수신하여 출력한다. 주황색(ANSI 256색 #208)으로 강조.
+bool Handle_S_SHOUT(SharedPtr<Session> SessionPtr, Protocol::S_SHOUT& Pkt)
+{
+	PrintChatMessage("\033[38;5;208m[확성기][" + Pkt.name() + "] " + Pkt.msg() + "\033[0m");
 	return true;
 }
 

@@ -20,6 +20,20 @@ enum class ClientState
 // 각 루프에서 요청 송신 후 대기하는 공통 패턴을 한 줄로 축약.
 bool WaitForResponse(Atomic<bool>& bDone, int32 iTimeoutMs = 5000);
 
+// 채팅 입력 모드. Tab 키로 토글된다.
+enum class ChatMode { Normal, Shout };
+
+// ChatLoop이 소유하는 입력 상태. 메인 스레드(입력 루프)와 IO 스레드(서버 메시지 수신)가
+// 모두 콘솔에 쓰기 때문에 GChatMutex로 직렬화한다.
+extern std::mutex   GChatMutex;
+extern bool         GChatActive;   // ChatLoop 안에 있을 때만 프롬프트 관리 활성화
+extern ChatMode     GChatMode;
+extern std::wstring GChatInput;
+
+// 수신 핸들러용 출력. ChatLoop 중이면 프롬프트 지우고 메시지 + 프롬프트 재출력.
+// ChatLoop 밖이면 그냥 한 줄 출력.
+void PrintChatMessage(const String& Line);
+
 // 로그인 응답 수신 상태. AuthLoop가 요청 후 대기하고, 수신 핸들러가 세팅한다.
 extern Atomic<bool> GLoginDone;
 extern Atomic<bool> GLoginSuccess;
