@@ -131,6 +131,7 @@ message FriendInfo
 {
 	string email = 1;
 	string nickname = 2;
+	bool is_online = 3;
 }
 
 message C_REQUEST_FRIEND

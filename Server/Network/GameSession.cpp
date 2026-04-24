@@ -4,6 +4,9 @@
 #include "Packet/PacketHeader.h"
 #include <spdlog/spdlog.h>
 
+#include "ServerGlobal.h"
+#include "SessionManager.h"
+
 GameSession::GameSession(TcpSocket Socket)
 	: Session(std::move(Socket))
 {
@@ -44,11 +47,11 @@ int32 GameSession::OnReceived(BYTE* Buffer, int32 iLen)
 	return iProcessLen;
 }
 
-// 연결 종료 시 방에서 퇴장한다.
 void GameSession::OnDisconnected()
 {
 	spdlog::info("Client disconnected");
 
+	// 연결 종료 시 방에서 퇴장한다.
 	if (CurrentRoom)
 	{
 		auto Self = std::static_pointer_cast<GameSession>(shared_from_this());
@@ -58,4 +61,8 @@ void GameSession::OnDisconnected()
 		});
 		CurrentRoom = nullptr;
 	}
+	
+	// sessionmgr에서도 제거 (중복 로그인 시 덮어쓰여진 새 세션을 보호하기 위해 본인 포인터 전달)
+	if (Info.PlayerId != 0)
+		GSessionManager->Unregister(Info.PlayerId, shared_from_this());
 }

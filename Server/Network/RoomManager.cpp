@@ -46,6 +46,13 @@ void RoomManager::RemoveRoom(uint32 RoomId)
 	Rooms.erase(RoomId);
 }
 
+// 보유 중인 모든 Room 을 해제한다. 서버 종료 시 호출.
+void RoomManager::Clear()
+{
+	std::unique_lock lock(Lock);
+	Rooms.clear();
+}
+
 void RoomManager::Broadcast(SendBufferRef buffer)
 {
 	auto RoomList = GetRoomList();

@@ -50,6 +50,7 @@ struct FriendInfo
 {
 	String Email;
 	String Nickname;
+	bool IsOnline;
 };
 
 // 방 리스트 수신 상태. LobbyLoop가 요청 후 대기하고, 수신 핸들러가 채운다.

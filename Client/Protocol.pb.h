@@ -3245,6 +3245,7 @@ class FriendInfo final : public ::google::protobuf::Message
   enum : int {
     kEmailFieldNumber = 1,
     kNicknameFieldNumber = 2,
+    kIsOnlineFieldNumber = 3,
   };
   // string email = 1;
   void clear_email() ;
@@ -3276,11 +3277,21 @@ class FriendInfo final : public ::google::protobuf::Message
   ::std::string* PROTOBUF_NONNULL _internal_mutable_nickname();
 
   public:
+  // bool is_online = 3;
+  void clear_is_online() ;
+  bool is_online() const;
+  void set_is_online(bool value);
+
+  private:
+  bool _internal_is_online() const;
+  void _internal_set_is_online(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:Protocol.FriendInfo)
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<1, 2,
+  static const ::google::protobuf::internal::TcParseTable<2, 3,
                                    0, 41,
                                    2>
       _table_;
@@ -3304,6 +3315,7 @@ class FriendInfo final : public ::google::protobuf::Message
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr email_;
     ::google::protobuf::internal::ArenaStringPtr nickname_;
+    bool is_online_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8700,6 +8712,31 @@ inline void FriendInfo::set_allocated_nickname(::std::string* PROTOBUF_NULLABLE 
     _impl_.nickname_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:Protocol.FriendInfo.nickname)
+}
+
+// bool is_online = 3;
+inline void FriendInfo::clear_is_online() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_online_ = false;
+  ClearHasBit(_impl_._has_bits_[0],
+                  0x00000004U);
+}
+inline bool FriendInfo::is_online() const {
+  // @@protoc_insertion_point(field_get:Protocol.FriendInfo.is_online)
+  return _internal_is_online();
+}
+inline void FriendInfo::set_is_online(bool value) {
+  _internal_set_is_online(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Protocol.FriendInfo.is_online)
+}
+inline bool FriendInfo::_internal_is_online() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_online_;
+}
+inline void FriendInfo::_internal_set_is_online(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_online_ = value;
 }
 
 // -------------------------------------------------------------------

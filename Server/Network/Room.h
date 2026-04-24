@@ -23,6 +23,6 @@ public:
 private:
 	uint32 RoomId = 0;
 	WString RoomName;
-	HashMap<uint64, SharedPtr<GameSession>> Sessions;
+	HashMap<uint64, WeakPtr<GameSession>> Sessions;
 	bool   bDead  = false;  // 마지막 유저가 나가 RoomManager에서 제거된 방. 이후 Enter 거부.
 };

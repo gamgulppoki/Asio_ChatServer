@@ -224,7 +224,7 @@ bool Handle_S_GET_FRIEND_LIST(SharedPtr<Session> SessionPtr, Protocol::S_GET_FRI
 		GFriendList.clear();
 		GFriendList.reserve(Pkt.friends_size());
 		for (const auto& f : Pkt.friends())
-			GFriendList.push_back({ f.email(), f.nickname() });
+			GFriendList.push_back({ f.email(), f.nickname(), f.is_online() });
 	}
 	GFriendListDone = true;
 	return true;

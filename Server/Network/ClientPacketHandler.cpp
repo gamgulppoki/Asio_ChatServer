@@ -8,6 +8,7 @@
 #include "StringUtils.h"
 #include <spdlog/spdlog.h>
 
+#include "SessionManager.h"
 #include "DB/Entities/Entities.h"
 #include "DB/ORM/DBContext.h"
 #include "DB/Generated/EntitiesGenerated.h"
@@ -128,6 +129,7 @@ bool Handle_C_LOGIN(SharedPtr<Session> SessionPtr, Protocol::C_LOGIN& Pkt)
 	const std::string& Nickname = FoundUser->Nickname.value();
 	GameSessionPtr->GetPlayerInfo().Nickname = StringUtils::Utf8ToWide(Nickname);
 	GameSessionPtr->GetPlayerInfo().PlayerId = FoundUser->Id.value();
+	GSessionManager->Register(FoundUser->Id.value(), GameSessionPtr);
 	ResPkt.set_success(true);
 	ResPkt.set_msg("Login successful");
 	ResPkt.set_name(Nickname);
@@ -729,20 +731,22 @@ bool Handle_C_GET_FRIEND_LIST(SharedPtr<Session> SessionPtr, Protocol::C_GET_FRI
 	{
 		User* user = f->ToUser.Get();
 		if (!user) continue;
-		
+
 		Protocol::FriendInfo* info = ResPkt.add_friends();
 		info->set_email(user->Email.value());
 		info->set_nickname(user->Nickname.value());
+		info->set_is_online(GSessionManager->IsOnline(user->Id.value()));
 	}
-	
+
 	for (Friendship* f : friendList2)
 	{
 		User* user = f->FromUser.Get();
 		if (!user) continue;
-		
+
 		Protocol::FriendInfo* info = ResPkt.add_friends();
 		info->set_email(user->Email.value());
 		info->set_nickname(user->Nickname.value());
+		info->set_is_online(GSessionManager->IsOnline(user->Id.value()));
 	}
 
 	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));

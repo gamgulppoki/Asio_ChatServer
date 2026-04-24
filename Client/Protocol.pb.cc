@@ -426,7 +426,8 @@ inline constexpr FriendInfo::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         nickname_(
             &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()) {}
+            ::_pbi::ConstantInitialized()),
+        is_online_{false} {}
 
 template <typename>
 PROTOBUF_CONSTEXPR FriendInfo::FriendInfo(::_pbi::ConstantInitialized)
@@ -1061,11 +1062,13 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Protocol::FriendInfo, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::Protocol::FriendInfo, _impl_.email_),
         PROTOBUF_FIELD_OFFSET(::Protocol::FriendInfo, _impl_.nickname_),
+        PROTOBUF_FIELD_OFFSET(::Protocol::FriendInfo, _impl_.is_online_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::Protocol::C_REQUEST_FRIEND, _impl_._has_bits_),
         4, // hasbit index offset
@@ -1156,18 +1159,18 @@ static const ::_pbi::MigrationSchema
         {113, sizeof(::Protocol::C_SHOUT)},
         {118, sizeof(::Protocol::S_SHOUT)},
         {125, sizeof(::Protocol::FriendInfo)},
-        {132, sizeof(::Protocol::C_REQUEST_FRIEND)},
-        {137, sizeof(::Protocol::S_REQUEST_FRIEND)},
-        {144, sizeof(::Protocol::C_ACCEPT_FRIEND)},
-        {149, sizeof(::Protocol::S_ACCEPT_FRIEND)},
-        {156, sizeof(::Protocol::C_REJECT_FRIEND)},
-        {161, sizeof(::Protocol::S_REJECT_FRIEND)},
-        {168, sizeof(::Protocol::C_GET_PENDING_FRIENDS)},
-        {169, sizeof(::Protocol::S_GET_PENDING_FRIENDS)},
-        {176, sizeof(::Protocol::C_GET_FRIEND_LIST)},
-        {177, sizeof(::Protocol::S_GET_FRIEND_LIST)},
-        {184, sizeof(::Protocol::C_REMOVE_FRIEND)},
-        {189, sizeof(::Protocol::S_REMOVE_FRIEND)},
+        {134, sizeof(::Protocol::C_REQUEST_FRIEND)},
+        {139, sizeof(::Protocol::S_REQUEST_FRIEND)},
+        {146, sizeof(::Protocol::C_ACCEPT_FRIEND)},
+        {151, sizeof(::Protocol::S_ACCEPT_FRIEND)},
+        {158, sizeof(::Protocol::C_REJECT_FRIEND)},
+        {163, sizeof(::Protocol::S_REJECT_FRIEND)},
+        {170, sizeof(::Protocol::C_GET_PENDING_FRIENDS)},
+        {171, sizeof(::Protocol::S_GET_PENDING_FRIENDS)},
+        {178, sizeof(::Protocol::C_GET_FRIEND_LIST)},
+        {179, sizeof(::Protocol::S_GET_FRIEND_LIST)},
+        {186, sizeof(::Protocol::C_REMOVE_FRIEND)},
+        {191, sizeof(::Protocol::S_REMOVE_FRIEND)},
 };
 static const ::_pb::Message* PROTOBUF_NONNULL const file_default_instances[] = {
     &::Protocol::_C_REGISTER_default_instance_._instance,
@@ -1228,28 +1231,29 @@ const char descriptor_table_protodef_Protocol_2eproto[] ABSL_ATTRIBUTE_SECTION_V
     "\022\017\n\007success\030\001 \001(\010\022\013\n\003msg\030\002 \001(\t\"\025\n\006C_CHAT"
     "\022\013\n\003msg\030\001 \001(\t\"#\n\006S_CHAT\022\013\n\003msg\030\001 \001(\t\022\014\n\004"
     "name\030\002 \001(\t\"\026\n\007C_SHOUT\022\013\n\003msg\030\001 \001(\t\"$\n\007S_"
-    "SHOUT\022\013\n\003msg\030\001 \001(\t\022\014\n\004name\030\002 \001(\t\"-\n\nFrie"
-    "ndInfo\022\r\n\005email\030\001 \001(\t\022\020\n\010nickname\030\002 \001(\t\""
-    "!\n\020C_REQUEST_FRIEND\022\r\n\005email\030\001 \001(\t\"0\n\020S_"
-    "REQUEST_FRIEND\022\017\n\007success\030\001 \001(\010\022\013\n\003msg\030\002"
-    " \001(\t\" \n\017C_ACCEPT_FRIEND\022\r\n\005email\030\001 \001(\t\"/"
-    "\n\017S_ACCEPT_FRIEND\022\017\n\007success\030\001 \001(\010\022\013\n\003ms"
-    "g\030\002 \001(\t\" \n\017C_REJECT_FRIEND\022\r\n\005email\030\001 \001("
-    "\t\"/\n\017S_REJECT_FRIEND\022\017\n\007success\030\001 \001(\010\022\013\n"
-    "\003msg\030\002 \001(\t\"\027\n\025C_GET_PENDING_FRIENDS\"P\n\025S"
-    "_GET_PENDING_FRIENDS\022\017\n\007success\030\001 \001(\010\022&\n"
-    "\010pendings\030\002 \003(\0132\024.Protocol.FriendInfo\"\023\n"
-    "\021C_GET_FRIEND_LIST\"K\n\021S_GET_FRIEND_LIST\022"
-    "\017\n\007success\030\001 \001(\010\022%\n\007friends\030\002 \003(\0132\024.Prot"
-    "ocol.FriendInfo\" \n\017C_REMOVE_FRIEND\022\r\n\005em"
-    "ail\030\001 \001(\t\"/\n\017S_REMOVE_FRIEND\022\017\n\007success\030"
-    "\001 \001(\010\022\013\n\003msg\030\002 \001(\tb\006proto3"
+    "SHOUT\022\013\n\003msg\030\001 \001(\t\022\014\n\004name\030\002 \001(\t\"@\n\nFrie"
+    "ndInfo\022\r\n\005email\030\001 \001(\t\022\020\n\010nickname\030\002 \001(\t\022"
+    "\021\n\tis_online\030\003 \001(\010\"!\n\020C_REQUEST_FRIEND\022\r"
+    "\n\005email\030\001 \001(\t\"0\n\020S_REQUEST_FRIEND\022\017\n\007suc"
+    "cess\030\001 \001(\010\022\013\n\003msg\030\002 \001(\t\" \n\017C_ACCEPT_FRIE"
+    "ND\022\r\n\005email\030\001 \001(\t\"/\n\017S_ACCEPT_FRIEND\022\017\n\007"
+    "success\030\001 \001(\010\022\013\n\003msg\030\002 \001(\t\" \n\017C_REJECT_F"
+    "RIEND\022\r\n\005email\030\001 \001(\t\"/\n\017S_REJECT_FRIEND\022"
+    "\017\n\007success\030\001 \001(\010\022\013\n\003msg\030\002 \001(\t\"\027\n\025C_GET_P"
+    "ENDING_FRIENDS\"P\n\025S_GET_PENDING_FRIENDS\022"
+    "\017\n\007success\030\001 \001(\010\022&\n\010pendings\030\002 \003(\0132\024.Pro"
+    "tocol.FriendInfo\"\023\n\021C_GET_FRIEND_LIST\"K\n"
+    "\021S_GET_FRIEND_LIST\022\017\n\007success\030\001 \001(\010\022%\n\007f"
+    "riends\030\002 \003(\0132\024.Protocol.FriendInfo\" \n\017C_"
+    "REMOVE_FRIEND\022\r\n\005email\030\001 \001(\t\"/\n\017S_REMOVE"
+    "_FRIEND\022\017\n\007success\030\001 \001(\010\022\013\n\003msg\030\002 \001(\tb\006p"
+    "roto3"
 };
 static ::absl::once_flag descriptor_table_Protocol_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_Protocol_2eproto = {
     false,
     false,
-    1466,
+    1485,
     descriptor_table_protodef_Protocol_2eproto,
     "Protocol.proto",
     &descriptor_table_Protocol_2eproto_once,
@@ -7171,6 +7175,7 @@ FriendInfo::FriendInfo(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.is_online_ = from._impl_.is_online_;
 
   // @@protoc_insertion_point(copy_constructor:Protocol.FriendInfo)
 }
@@ -7183,6 +7188,7 @@ PROTOBUF_NDEBUG_INLINE FriendInfo::Impl_::Impl_(
 
 inline void FriendInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.is_online_ = {};
 }
 FriendInfo::~FriendInfo() {
   // @@protoc_insertion_point(destructor:Protocol.FriendInfo)
@@ -7243,16 +7249,16 @@ FriendInfo::GetClassData() const {
   return FriendInfo_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<1, 2, 0, 41, 2>
+const ::_pbi::TcParseTable<2, 3, 0, 41, 2>
 FriendInfo::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(FriendInfo, _impl_._has_bits_),
     0, // no _extensions_
-    2, 8,  // max_field_number, fast_idx_mask
+    3, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967292,  // skipmap
+    4294967288,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    2,  // num_field_entries
+    3,  // num_field_entries
     0,  // num_aux_entries
     offsetof(decltype(_table_), field_names),  // no aux_entries
     FriendInfo_class_data_.base(),
@@ -7262,14 +7268,19 @@ FriendInfo::_table_ = {
     ::_pbi::TcParser::GetTable<::Protocol::FriendInfo>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // string nickname = 2;
-    {::_pbi::TcParser::FastUS1,
-     {18, 1, 0,
-      PROTOBUF_FIELD_OFFSET(FriendInfo, _impl_.nickname_)}},
+    {::_pbi::TcParser::MiniParse, {}},
     // string email = 1;
     {::_pbi::TcParser::FastUS1,
      {10, 0, 0,
       PROTOBUF_FIELD_OFFSET(FriendInfo, _impl_.email_)}},
+    // string nickname = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 1, 0,
+      PROTOBUF_FIELD_OFFSET(FriendInfo, _impl_.nickname_)}},
+    // bool is_online = 3;
+    {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(FriendInfo, _impl_.is_online_), 2>(),
+     {24, 2, 0,
+      PROTOBUF_FIELD_OFFSET(FriendInfo, _impl_.is_online_)}},
   }}, {{
     65535, 65535
   }}, {{
@@ -7277,6 +7288,8 @@ FriendInfo::_table_ = {
     {PROTOBUF_FIELD_OFFSET(FriendInfo, _impl_.email_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     // string nickname = 2;
     {PROTOBUF_FIELD_OFFSET(FriendInfo, _impl_.nickname_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // bool is_online = 3;
+    {PROTOBUF_FIELD_OFFSET(FriendInfo, _impl_.is_online_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
   }},
   // no aux_entries
   {{
@@ -7302,6 +7315,7 @@ PROTOBUF_NOINLINE void FriendInfo::Clear() {
       _impl_.nickname_.ClearNonDefaultToEmpty();
     }
   }
+  _impl_.is_online_ = false;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -7345,6 +7359,15 @@ PROTOBUF_NOINLINE void FriendInfo::Clear() {
     }
   }
 
+  // bool is_online = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_is_online() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_is_online(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -7370,7 +7393,7 @@ PROTOBUF_NOINLINE void FriendInfo::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // string email = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_email().empty()) {
@@ -7383,6 +7406,12 @@ PROTOBUF_NOINLINE void FriendInfo::Clear() {
       if (!this_._internal_nickname().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_nickname());
+      }
+    }
+    // bool is_online = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_is_online() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -7404,7 +7433,7 @@ void FriendInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_email().empty()) {
         _this->_internal_set_email(from._internal_email());
@@ -7421,6 +7450,11 @@ void FriendInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         if (_this->_impl_.nickname_.IsDefault()) {
           _this->_internal_set_nickname("");
         }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_is_online() != 0) {
+        _this->_impl_.is_online_ = from._impl_.is_online_;
       }
     }
   }
@@ -7445,6 +7479,7 @@ void FriendInfo::InternalSwap(FriendInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL oth
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.email_, &other->_impl_.email_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.nickname_, &other->_impl_.nickname_, arena);
+  swap(_impl_.is_online_, other->_impl_.is_online_);
 }
 
 ::google::protobuf::Metadata FriendInfo::GetMetadata() const {

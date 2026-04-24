@@ -555,7 +555,11 @@ void ClientApp::FriendLoop()
 		else
 		{
 			for (const auto& F : GFriendList)
-				std::cout << "  - " << F.Email << " (" << F.Nickname << ")\n";
+			{
+				// 온라인: 초록색 online, 오프라인: 빨간색 offline
+				const char* StatusTag = F.IsOnline ? "\033[32monline\033[0m" : "\033[31moffline\033[0m";
+				std::cout << "  - " << F.Email << " (" << F.Nickname << ") " << StatusTag << "\n";
+			}
 		}
 	}
 

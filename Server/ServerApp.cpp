@@ -22,6 +22,7 @@ ServerApp::ServerApp()
 	GSendBufferManager = &SendBufferManagerInstance_;
 	GRoomManager = &RoomManagerInstance_;
 	GDBPool = &DBPoolInstance_;
+	GSessionManager = &SessionManagerInstance_;
 
 	ClientPacketHandler::Init();
 }
@@ -34,6 +35,7 @@ ServerApp::~ServerApp()
 	GRoomManager = nullptr;
 	GSendBufferManager = nullptr;
 	GGlobalQueue = nullptr;
+	GSessionManager = nullptr;
 }
 
 // 서버 가동. DB 풀 초기화 -> IoContext 생성 -> Listener 시작 -> 워커 스레드 가동.
@@ -61,10 +63,13 @@ void ServerApp::Run()
 	threadManager.Join();
 
 	// 명시적 종료 순서
-	GThreadManager = nullptr;
-	AcceptListener.Stop();
-	Context.reset();
-	GDBPool->Clear();
+	AcceptListener.Stop();           // 1. 신규 접속 차단
+	GSessionManager->Clear();        // 2. 기존 세션 전부 해제 (소켓 dtor 여기서 돌게)
+	GRoomManager->Clear();           // 3. Room 해제 (WeakPtr 뿐이면 별 일 없지만 명시적으로)
+	GThreadManager = nullptr;        // 4. 워커 join
+	Context.reset();                 // 5. io_context 파괴 (이 시점에 아무 소켓도 의존 안 함)
+	GDBPool->Clear();                // 6. DB pool
+
 }
 
 void ServerApp::InitDB()
@@ -86,10 +91,10 @@ void ServerApp::InitDB()
 	}
 }
 
-// 초기 방 생성
-void ServerApp::InitRooms()
-{
-	GRoomManager->CreateRoom(L"Room 1");
-	GRoomManager->CreateRoom(L"Room 2");
-	GRoomManager->CreateRoom(L"Room 3");
-}
+// // 초기 방 생성
+// void ServerApp::InitRooms()
+// {
+// 	GRoomManager->CreateRoom(L"Room 1");
+// 	GRoomManager->CreateRoom(L"Room 2");
+// 	GRoomManager->CreateRoom(L"Room 3");
+// }

@@ -44,8 +44,9 @@ void Room::Leave(SharedPtr<GameSession> SessionPtr)
 // 방의 모든 세션에 패킷을 전달한다.
 void Room::Broadcast(SendBufferRef Buffer)
 {
-	for (auto& [PlayerId, SessionPtr] : Sessions)
+	for (auto& [PlayerId, weakSessionPtr] : Sessions)
 	{
-		SessionPtr->Send(Buffer);
+		if (auto SessionPtr = weakSessionPtr.lock())
+			SessionPtr->Send(Buffer);
 	}
 }

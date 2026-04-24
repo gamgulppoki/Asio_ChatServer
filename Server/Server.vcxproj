@@ -174,7 +174,7 @@
       <Message>Generating packet code from Protocol.proto...</Message>
     </CustomBuildStep>
   </ItemDefinitionGroup>
-  <ItemGroup><ClInclude Include="ServerApp.h" />
+  <ItemGroup><ClInclude Include="Network\SessionManager.h" /><ClInclude Include="ServerApp.h" />
     <ClInclude Include="ServerGlobal.h" />
     <ClInclude Include="Network\Listener.h" />
     <ClInclude Include="Network\GameSession.h" />
@@ -202,6 +202,7 @@
     <None Include="..\Proto\Protocol.proto" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Network\SessionManager.cpp" />
     <ClCompile Include="Server.cpp" />
     <ClCompile Include="ServerApp.cpp" />
     <ClCompile Include="ServerGlobal.cpp" />
