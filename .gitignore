@@ -22,3 +22,7 @@ vcpkg_installed/
 
 # Misc
 *.log
+
+# Markdown (README only)
+*.md
+!README.md
