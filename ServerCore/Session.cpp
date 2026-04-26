@@ -2,13 +2,13 @@
 #include "Packet/PacketHeader.h"
 #include <spdlog/spdlog.h>
 
-// 세션 생성자. 소켓 소유권을 이동받고 RecvBuffer를 초기화한다.
+// 소켓 소유권을 이동 받고 RecvBuffer를 초기화한다.
 Session::Session(TcpSocket Socket)
 	: Socket(std::move(Socket)), RecvBuf(4096)
 {
 }
 
-// 세션을 시작한다. OnConnected를 호출하고 수신 코루틴을 생성한다.
+// OnConnected 훅을 호출하고 수신 코루틴을 spawn 한다.
 void Session::Start()
 {
 	OnConnected();
@@ -57,7 +57,7 @@ asio::awaitable<void> Session::DoRead()
 	}
 }
 
-// 쓰기 큐에 있는 SendBuffer를 순서대로 전송한다. 큐가 비면 종료된다.
+// 쓰기 큐의 SendBuffer 를 순서대로 전송한다. 큐가 비면 코루틴이 종료된다.
 asio::awaitable<void> Session::DoWrite()
 {
 	auto Self = shared_from_this();
@@ -82,7 +82,8 @@ asio::awaitable<void> Session::DoWrite()
 	bIsWriting = false;
 }
 
-// SendBuffer를 쓰기 큐에 넣고, DoWrite가 안 돌고 있으면 새로 시작한다.
+// SendBuffer 를 쓰기 큐에 넣는다. DoWrite 가 실행 중이 아니면 새로 spawn 한다.
+// asio::post 로 Socket executor 스레드에 우회시켜 WriteQueue 접근을 직렬화한다.
 void Session::Send(SendBufferRef Buffer)
 {
 	asio::post(Socket.get_executor(), [Self = shared_from_this(), Buffer]()
@@ -96,7 +97,7 @@ void Session::Send(SendBufferRef Buffer)
 	});
 }
 
-// 소켓을 닫는다.
+// 소켓을 닫는다. 진행 중이던 비동기 연산들은 예외로 풀려 OnDisconnected 까지 흘러간다.
 void Session::Disconnect()
 {
 	ErrorCode Error;

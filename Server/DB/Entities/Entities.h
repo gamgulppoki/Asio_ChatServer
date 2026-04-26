@@ -34,3 +34,4 @@ struct Friendship
     FK(FromUserId) Navigation<User>            FromUser;
     FK(ToUserId)   Navigation<User>            ToUser;
 };
+

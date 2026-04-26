@@ -1,5 +1,6 @@
 ﻿#include "ClientApp.h"
 #include "CoreGlobal.h"
+#include "ConsoleUI.h"
 #include "ServerPacketHandler.h"
 #include "StringUtils.h"
 #include <spdlog/spdlog.h>
@@ -38,9 +39,77 @@ bool         GChatActive = false;
 ChatMode     GChatMode   = ChatMode::Normal;
 std::wstring GChatInput;
 
+// 본인 닉네임 / 현재 방 정보. ClientApp.h 선언의 정의부.
+String GMyNickname;
+int32  GCurrentRoomId = 0;
+String GCurrentRoomName;
+
 namespace
 {
-	// 현재 프롬프트 + 입력 버퍼를 현재 줄에 그린다. 반드시 GChatMutex 보호 안에서만 호출.
+	// ChatLoop 카톡 레이아웃 행 분배 (콘솔 높이 H 기준):
+	//   1~3      : 헤더 박스 (┌─┐ / 방 정보 / └─┘)
+	//   4 ~ H-3  : 채팅 스크롤 영역 (DECSTBM)
+	//   H-2      : 구분선 + 안내
+	//   H-1      : 입력 프롬프트
+	//   H        : 여유 (스크롤 안전 마진)
+	int32 ChatHeaderTopRow()    { return 1; }
+	int32 ChatScrollTopRow()    { return 4; }
+	int32 ChatScrollBottomRow() { return ConsoleUI::GetSize().Height - 3; }
+	int32 ChatDividerRow()      { return ConsoleUI::GetSize().Height - 2; }
+	int32 ChatPromptRow()       { return ConsoleUI::GetSize().Height - 1; }
+
+	// 진입 시 화면 셋업: cls -> 헤더 박스 -> 구분선 -> 스크롤 영역 지정.
+	void DrawChatLayout()
+	{
+		auto Sz = ConsoleUI::GetSize();
+		ConsoleUI::ClearScreen();
+
+		const int32 InnerW = Sz.Width - 2;
+		const String RoomTitle = "방 #" + std::to_string(GCurrentRoomId) + " · " + GCurrentRoomName;
+
+		// 행 1: ┌──────┐
+		ConsoleUI::MoveCursor(1, 1);
+		std::cout << "┌";
+		for (int32 i = 0; i < InnerW; ++i) std::cout << "─";
+		std::cout << "┐";
+
+		// 행 2: │ {RoomTitle}                     │
+		ConsoleUI::MoveCursor(2, 1);
+		std::cout << "│ " << RoomTitle;
+		const int32 PadLen = InnerW - 1 - ConsoleUI::DisplayWidth(RoomTitle);
+		for (int32 i = 0; i < PadLen; ++i) std::cout << " ";
+		std::cout << "│";
+
+		// 행 3: └──────┘
+		ConsoleUI::MoveCursor(3, 1);
+		std::cout << "└";
+		for (int32 i = 0; i < InnerW; ++i) std::cout << "─";
+		std::cout << "┘";
+
+		// 구분선 + 안내 (회색 #240)
+		ConsoleUI::MoveCursor(ChatDividerRow(), 1);
+		const String Hint = " Tab: 모드 / exit: 나가기 ";
+		std::cout << "\033[38;5;240m";
+		std::cout << "─";
+		std::cout << Hint;
+		const int32 DivPad = Sz.Width - 1 - ConsoleUI::DisplayWidth(Hint);
+		for (int32 i = 0; i < DivPad; ++i) std::cout << "─";
+		std::cout << "\033[0m";
+
+		// 스크롤 영역 (4 ~ H-3) — 채팅 메시지가 이 안에서만 위로 흘러감
+		ConsoleUI::SetScrollRegion(ChatScrollTopRow(), ChatScrollBottomRow());
+
+		std::cout << std::flush;
+	}
+
+	// 이탈 시 정리: 스크롤 영역 해제 + cls.
+	void TeardownChatLayout()
+	{
+		ConsoleUI::ResetScrollRegion();
+		ConsoleUI::ClearScreen();
+	}
+
+	// 입력 줄(H-1)에 모드 태그 + 입력 버퍼를 그린다. 반드시 GChatMutex 보호 안에서만 호출.
 	void RedrawPromptLocked()
 	{
 		// 모드별 태그: 일반=기본색, 확성기=주황(#208), 귓속말=하늘색(#36)
@@ -51,7 +120,9 @@ namespace
 		case ChatMode::Whisper: Tag = "\033[36m[귓속말]\033[0m";       break;
 		default: break;
 		}
-		std::cout << "\r\033[2K" << Tag << " > "
+		ConsoleUI::MoveCursor(ChatPromptRow(), 1);
+		ConsoleUI::ClearLine();
+		std::cout << Tag << " > "
 		          << StringUtils::WideToUtf8(GChatInput) << std::flush;
 	}
 
@@ -71,20 +142,40 @@ namespace
 	}
 }
 
-// 브로드캐스트 메시지 출력. ChatLoop 중이면 프롬프트를 잠깐 지웠다가 메시지 찍고 프롬프트 재출력.
-// mutex 덕분에 입력 스레드의 Redraw와 섞이지 않는다.
-void PrintChatMessage(const String& Line)
+// 채팅 메시지 출력. ChatLoop 중이면:
+//   - 본인(bIsMine=true): 오른쪽 정렬 (콘솔 폭 - 표시폭 - 우측 마진 1)
+//   - 타인(bIsMine=false): 왼쪽 들여쓰기 2칸
+// 채팅 스크롤 영역 마지막 줄로 이동 -> "\n" 으로 영역 내 한 줄 스크롤 -> 메시지 출력 -> 커서 복원.
+// ChatLoop 밖이면 정렬 무시하고 그냥 한 줄 출력.
+void PrintChatMessage(const String& Line, bool bIsMine)
 {
 	std::lock_guard<std::mutex> Lock(GChatMutex);
-	if (GChatActive)
+
+	if (!GChatActive)
 	{
-		std::cout << "\r\033[2K" << Line << "\n";
-		RedrawPromptLocked();
+		std::cout << Line << "\n" << std::flush;
+		return;
+	}
+
+	String Aligned;
+	if (bIsMine)
+	{
+		const int32 W = ConsoleUI::GetSize().Width;
+		const int32 Lw = ConsoleUI::DisplayWidth(Line);
+		const int32 PadLen = W - Lw - 1;
+		if (PadLen > 0)
+			Aligned.assign(PadLen, ' ');
+		Aligned += Line;
 	}
 	else
 	{
-		std::cout << Line << "\n" << std::flush;
+		Aligned = "  " + Line;
 	}
+
+	ConsoleUI::SaveCursor();
+	ConsoleUI::MoveCursor(ChatScrollBottomRow(), 1);
+	std::cout << "\n" << Aligned << std::flush;
+	ConsoleUI::RestoreCursor();
 }
 
 // 전역 싱글톤 바인딩 + 패킷 핸들러 초기화
@@ -139,30 +230,54 @@ void ClientApp::Run()
 	IoThread.join();
 }
 
-// 회원가입/로그인 메뉴
+// 회원가입/로그인 화면. 성공 시 Lobby 로 자동 전환.
+// 직전 결과(LastMessage)는 메뉴 화면 구분선 아래에 색상 톤으로 표시.
 void ClientApp::AuthLoop()
 {
 	bool bLoggedIn = false;
+	String LastMessage;
+	const char* LastMessageColor = nullptr;
 
 	while (!bLoggedIn)
 	{
-		std::cout << "\n=== Welcome ===" << std::endl;
-		std::cout << "1. Register" << std::endl;
-		std::cout << "2. Login" << std::endl;
-		std::cout << "> ";
+		// 메뉴 화면
+		ConsoleUI::ClearScreen();
+		ConsoleUI::DrawHeaderBox("Webzen Chat", "로그인 또는 회원가입");
+		std::cout << "\n";
+		std::cout << "  1. 회원가입\n";
+		std::cout << "  2. 로그인\n";
+		std::cout << "\n";
+		ConsoleUI::DrawDivider();
+		if (!LastMessage.empty())
+		{
+			std::cout << (LastMessageColor ? LastMessageColor : "")
+			          << "  " << LastMessage
+			          << ConsoleUI::Color::Reset << "\n\n";
+		}
+		std::cout << "> " << std::flush;
 
 		String Choice;
 		std::getline(std::cin, Choice);
+		LastMessage.clear();
+		LastMessageColor = nullptr;
 
 		if (Choice == "1")
 		{
+			// 회원가입 입력 화면
+			ConsoleUI::ClearScreen();
+			ConsoleUI::DrawHeaderBox("Webzen Chat", "회원가입");
+			std::cout << "\n";
+
 			String Name, Email, Password;
-			std::cout << "Name: ";
+			std::cout << ConsoleUI::Color::Hint << "  닉네임   : " << ConsoleUI::Color::Reset;
 			std::getline(std::cin, Name);
-			std::cout << "Email: ";
+			std::cout << ConsoleUI::Color::Hint << "  이메일   : " << ConsoleUI::Color::Reset;
 			std::getline(std::cin, Email);
-			std::cout << "Password: ";
+			std::cout << ConsoleUI::Color::Hint << "  비밀번호 : " << ConsoleUI::Color::Reset;
 			std::getline(std::cin, Password);
+
+			GRegisterDone = false;
+			GRegisterSuccess = false;
 
 			Protocol::C_REGISTER Pkt;
 			Pkt.set_name(Name);
@@ -170,259 +285,348 @@ void ClientApp::AuthLoop()
 			Pkt.set_password(Password);
 			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
 
-			// 서버 응답 수신 대기
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			WaitForResponse(GRegisterDone);
+			if (!GRegisterDone)
+			{
+				LastMessage = "서버 응답 없음";
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
+			else if (GRegisterSuccess)
+			{
+				LastMessage = "회원가입 성공. 로그인을 진행해 주세요.";
+				LastMessageColor = ConsoleUI::Color::Success;
+			}
+			else
+			{
+				LastMessage = "회원가입 실패: " + GRegisterMessage;
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
 		}
 		else if (Choice == "2")
 		{
+			// 로그인 입력 화면
+			ConsoleUI::ClearScreen();
+			ConsoleUI::DrawHeaderBox("Webzen Chat", "로그인");
+			std::cout << "\n";
+
 			String Email, Password;
-			std::cout << "Email: ";
+			std::cout << ConsoleUI::Color::Hint << "  이메일   : " << ConsoleUI::Color::Reset;
 			std::getline(std::cin, Email);
-			std::cout << "Password: ";
+			std::cout << ConsoleUI::Color::Hint << "  비밀번호 : " << ConsoleUI::Color::Reset;
 			std::getline(std::cin, Password);
+
+			GLoginDone = false;
+			GLoginSuccess = false;
 
 			Protocol::C_LOGIN Pkt;
 			Pkt.set_email(Email);
 			Pkt.set_password(Password);
-
-			// 응답 플래그 초기화 후 송신
-			GLoginDone = false;
-			GLoginSuccess = false;
 			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
 
 			WaitForResponse(GLoginDone);
-
-			if (GLoginSuccess)
+			if (!GLoginDone)
+			{
+				LastMessage = "서버 응답 없음";
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
+			else if (GLoginSuccess)
+			{
 				bLoggedIn = true;
-			// 실패 시 메뉴 루프 계속
+			}
+			else
+			{
+				LastMessage = "로그인 실패: " + (GLoginMessage.empty() ? String("이메일/비밀번호를 확인해 주세요") : GLoginMessage);
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
+		}
+		else
+		{
+			LastMessage = "잘못된 선택입니다. 1 또는 2 를 입력해 주세요.";
+			LastMessageColor = ConsoleUI::Color::Error;
 		}
 	}
 
-	WaitForEnter();
 	State_ = ClientState::Lobby;
 }
 
+// 로비 화면. 메뉴 + 귓속말 토글(Tab) 을 한 화면에서 처리.
+// 메뉴 선택 후 분기(방 생성/입장/마이페이지/친구). State_ 전환 시 외부 메인 루프가 다음 Loop 호출.
 void ClientApp::LobbyLoop()
 {
-	// 로비 상단 메뉴 + 귓속말 토글 입력.
-	// 메뉴 선택은 숫자(1~4), 귓속말 입력은 "/대상 메시지" 형식. Tab 으로 모드 전환.
-	// 서브 입력(방 이름/ID 등)은 기존 std::getline 유지.
 	enum class LobbyMode { Menu, Whisper };
-	LobbyMode Mode = LobbyMode::Menu;
-	std::wstring InputBuf;
+	String LastMessage;
+	const char* LastMessageColor = nullptr;
 
-	auto RedrawLobby = [&]()
+	while (State_ == ClientState::Lobby)
 	{
-		std::cout << "\r\033[2K";
-		if (Mode == LobbyMode::Menu)
-			std::cout << "> " << StringUtils::WideToUtf8(InputBuf) << std::flush;
-		else
-			std::cout << "\033[36m[귓속말]\033[0m > " << StringUtils::WideToUtf8(InputBuf) << std::flush;
-	};
-
-	std::cout << "1. 방 생성\n";
-	std::cout << "2. 방 입장\n";
-	std::cout << "3. 마이페이지\n";
-	std::cout << "4. 친구 목록\n";
-	std::cout << "(Tab: 메뉴/귓속말 전환, 귓속말 형식: /대상닉네임 메시지)\n";
-	RedrawLobby();
-
-	int32 iMenuChoice = 0;
-	bool  bMenuSelected = false;
-
-	while (!bMenuSelected)
-	{
-		wint_t ch = _getwch();
-
-		if (ch == L'\t')
+		ConsoleUI::ClearScreen();
+		ConsoleUI::DrawHeaderBox("Webzen Chat — 로비", GMyNickname + " 님 환영합니다");
+		std::cout << "\n";
+		std::cout << "  1. 방 생성\n";
+		std::cout << "  2. 방 입장\n";
+		std::cout << "  3. 마이페이지\n";
+		std::cout << "  4. 친구 목록\n";
+		std::cout << "\n";
+		ConsoleUI::DrawDivider("Tab: 메뉴 / 귓속말   귓속말 형식: /닉네임 메시지");
+		if (!LastMessage.empty())
 		{
-			Mode = (Mode == LobbyMode::Menu) ? LobbyMode::Whisper : LobbyMode::Menu;
-			InputBuf.clear();
-			RedrawLobby();
-			continue;
+			std::cout << (LastMessageColor ? LastMessageColor : "")
+			          << "  " << LastMessage
+			          << ConsoleUI::Color::Reset << "\n\n";
+			LastMessage.clear();
+			LastMessageColor = nullptr;
 		}
 
-		if (ch == L'\r')
-		{
-			String Input = StringUtils::WideToUtf8(InputBuf);
-			InputBuf.clear();
-			std::cout << "\n";  // 다음 줄로 내림 (지금 타이핑한 줄 확정)
+		LobbyMode Mode = LobbyMode::Menu;
+		std::wstring InputBuf;
 
-			if (Mode == LobbyMode::Whisper)
+		auto RedrawLobby = [&]()
+		{
+			std::cout << "\r\033[2K";
+			if (Mode == LobbyMode::Menu)
+				std::cout << "[메뉴]   > " << StringUtils::WideToUtf8(InputBuf) << std::flush;
+			else
+				std::cout << ConsoleUI::Color::Info << "[귓속말]" << ConsoleUI::Color::Reset
+				          << " > " << StringUtils::WideToUtf8(InputBuf) << std::flush;
+		};
+
+		RedrawLobby();
+
+		int32 iMenuChoice = 0;
+		bool  bMenuSelected = false;
+
+		while (!bMenuSelected)
+		{
+			wint_t ch = _getwch();
+
+			if (ch == L'\t')
 			{
-				String Target, Msg;
-				if (Input.empty())
+				Mode = (Mode == LobbyMode::Menu) ? LobbyMode::Whisper : LobbyMode::Menu;
+				InputBuf.clear();
+				RedrawLobby();
+				continue;
+			}
+
+			if (ch == L'\r')
+			{
+				String Input = StringUtils::WideToUtf8(InputBuf);
+				InputBuf.clear();
+				std::cout << "\n";
+
+				if (Mode == LobbyMode::Whisper)
 				{
+					String Target, Msg;
+					if (Input.empty())
+					{
+						RedrawLobby();
+						continue;
+					}
+					if (!ParseWhisperInput(Input, Target, Msg))
+					{
+						std::cout << ConsoleUI::Color::Error
+						          << "  [귓속말] 형식 오류. 사용법: /대상닉네임 메시지"
+						          << ConsoleUI::Color::Reset << "\n";
+					}
+					else
+					{
+						Protocol::C_WHISPER WhisperPkt;
+						WhisperPkt.set_target_nickname(Target);
+						WhisperPkt.set_message(Msg);
+						SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(WhisperPkt));
+
+						std::cout << ConsoleUI::Color::Info
+						          << "  [귓속말 → " << Target << "] " << Msg
+						          << ConsoleUI::Color::Reset << "\n";
+					}
 					RedrawLobby();
 					continue;
 				}
-				if (!ParseWhisperInput(Input, Target, Msg))
+
+				try
 				{
-					std::cout << "\033[31m[귓속말] 형식 오류. 사용법: /대상닉네임 메시지\033[0m\n";
+					iMenuChoice = std::stoi(Input);
+					bMenuSelected = true;
+				}
+				catch (const std::exception&)
+				{
+					LastMessage = "잘못된 입력입니다. 1~4 중 선택해주세요.";
+					LastMessageColor = ConsoleUI::Color::Error;
+					bMenuSelected = false;
+				}
+				break;
+			}
+
+			if (ch == L'\b')
+			{
+				if (!InputBuf.empty())
+				{
+					InputBuf.pop_back();
+					RedrawLobby();
+				}
+				continue;
+			}
+
+			if (ch < 32)
+				continue;
+
+			InputBuf.push_back(static_cast<wchar_t>(ch));
+			RedrawLobby();
+		}
+
+		if (!bMenuSelected)
+			continue;  // 다시 메뉴 그리기
+
+		int32 iTargetRoomId = 0;
+
+		if (iMenuChoice == 1)
+		{
+			// 방 생성 화면
+			ConsoleUI::ClearScreen();
+			ConsoleUI::DrawHeaderBox("Webzen Chat — 방 생성");
+			std::cout << "\n";
+			std::cout << ConsoleUI::Color::Hint << "  방 이름 : " << ConsoleUI::Color::Reset;
+
+			String RoomName;
+			std::getline(std::cin, RoomName);
+
+			GCreateRoomDone = false;
+			GCreateRoomSuccess = false;
+
+			Protocol::C_CREATE_ROOM Pkt;
+			Pkt.set_roomname(RoomName);
+			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
+
+			WaitForResponse(GCreateRoomDone);
+
+			if (!GCreateRoomDone)
+			{
+				LastMessage = "서버 응답 없음";
+				LastMessageColor = ConsoleUI::Color::Error;
+				continue;
+			}
+			if (!GCreateRoomSuccess)
+			{
+				LastMessage = "방 생성 실패";
+				LastMessageColor = ConsoleUI::Color::Error;
+				continue;
+			}
+
+			iTargetRoomId = GCreatedRoomId;
+			GCurrentRoomId = iTargetRoomId;
+			GCurrentRoomName = RoomName;
+		}
+		else if (iMenuChoice == 2)
+		{
+			GRoomListDone = false;
+			Protocol::C_GET_ROOM_LIST Pkt;
+			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
+
+			WaitForResponse(GRoomListDone);
+
+			ConsoleUI::ClearScreen();
+			ConsoleUI::DrawHeaderBox("Webzen Chat — 방 리스트");
+			std::cout << "\n";
+
+			if (!GRoomListDone)
+			{
+				LastMessage = "서버 응답 없음";
+				LastMessageColor = ConsoleUI::Color::Error;
+				continue;
+			}
+
+			bool bEmpty = false;
+			{
+				std::lock_guard<std::mutex> Lock(GRoomListMutex);
+				if (GRoomList.empty())
+				{
+					bEmpty = true;
 				}
 				else
 				{
-					Protocol::C_WHISPER WhisperPkt;
-					WhisperPkt.set_target_nickname(Target);
-					WhisperPkt.set_message(Msg);
-					SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(WhisperPkt));
-
-					// 로컬 에코 — Lobby 에선 프롬프트 복원 없이 그냥 std::cout
-					std::cout << "\033[36m[귓속말] (" << Target << ") " << Msg << "\033[0m\n";
+					for (const auto& Room : GRoomList)
+						std::cout << "  [" << Room.RoomId << "] " << Room.RoomName << "\n";
 				}
-				RedrawLobby();
+			}
+
+			if (bEmpty)
+			{
+				std::cout << ConsoleUI::Color::Hint << "  (존재하는 방이 없습니다)" << ConsoleUI::Color::Reset << "\n";
+				std::cout << "\n";
+				ConsoleUI::DrawDivider();
+				std::cout << ConsoleUI::Color::Hint << "  엔터를 눌러 돌아가기..." << ConsoleUI::Color::Reset << std::flush;
+				String Dummy;
+				std::getline(std::cin, Dummy);
 				continue;
 			}
 
-			// Menu 모드: 숫자 파싱
+			std::cout << "\n";
+			ConsoleUI::DrawDivider();
+			std::cout << ConsoleUI::Color::Hint << "  입장할 방 ID : " << ConsoleUI::Color::Reset;
+
+			String SelectInput;
+			std::getline(std::cin, SelectInput);
+
 			try
 			{
-				iMenuChoice = std::stoi(Input);
-				bMenuSelected = true;
-				break;
+				iTargetRoomId = std::stoi(SelectInput);
 			}
 			catch (const std::exception&)
 			{
-				std::cout << "잘못된 입력입니다.\n";
-				RedrawLobby();
+				LastMessage = "잘못된 방 ID 입니다.";
+				LastMessageColor = ConsoleUI::Color::Error;
 				continue;
 			}
-		}
 
-		if (ch == L'\b')
-		{
-			if (!InputBuf.empty())
+			GCurrentRoomId = iTargetRoomId;
 			{
-				InputBuf.pop_back();
-				RedrawLobby();
+				std::lock_guard<std::mutex> Lock(GRoomListMutex);
+				for (const auto& Room : GRoomList)
+				{
+					if (Room.RoomId == iTargetRoomId)
+					{
+						GCurrentRoomName = Room.RoomName;
+						break;
+					}
+				}
 			}
+		}
+		else if (iMenuChoice == 3)
+		{
+			State_ = ClientState::MyPage;
+			return;
+		}
+		else if (iMenuChoice == 4)
+		{
+			State_ = ClientState::Friend;
+			return;
+		}
+		else
+		{
+			LastMessage = "잘못된 선택입니다. 1~4 중 선택해주세요.";
+			LastMessageColor = ConsoleUI::Color::Error;
 			continue;
 		}
 
-		if (ch < 32)
-			continue;
+		// 방 입장 패킷 송신 후 ChatLoop 으로
+		Protocol::C_ENTER_ROOM EnterPkt;
+		EnterPkt.set_roomid(iTargetRoomId);
+		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(EnterPkt));
 
-		InputBuf.push_back(static_cast<wchar_t>(ch));
-		RedrawLobby();
-	}
-
-	int32 iTargetRoomId = 0;
-
-	if (iMenuChoice == 1)
-	{
-		// 방 이름
-		std::cout << "생성할 방 이름을 입력해주세요.\n";
-		std::cout << "> ";
-
-		String RoomName;
-		std::getline(std::cin, RoomName);
-
-		// 응답 플래그 리셋 후 방 생성 패킷 송신
-		GCreateRoomDone = false;
-		GCreateRoomSuccess = false;
-
-		Protocol::C_CREATE_ROOM Pkt;
-		Pkt.set_roomname(RoomName);
-		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
-
-		WaitForResponse(GCreateRoomDone);
-
-		if (!GCreateRoomDone)
-		{
-			std::cout << "서버 응답 없음" << std::endl;
-			return;
-		}
-		if (!GCreateRoomSuccess)
-		{
-			std::cout << "방 생성 실패" << std::endl;
-			return;
-		}
-
-		iTargetRoomId = GCreatedRoomId;
-	}
-	else if (iMenuChoice == 2)
-	{
-		// 방 리스트 요청 (응답은 Handle_S_GET_ROOM_LIST에서 GRoomList로 채워짐)
-		GRoomListDone = false;
-
-		Protocol::C_GET_ROOM_LIST Pkt;
-		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
-
-		WaitForResponse(GRoomListDone);
-
-		if (!GRoomListDone)
-		{
-			std::cout << "서버 응답 없음" << std::endl;
-			return;
-		}
-
-		// 방 리스트 출력
-		{
-			std::lock_guard<std::mutex> Lock(GRoomListMutex);
-			if (GRoomList.empty())
-			{
-				std::cout << "존재하는 방이 없습니다." << std::endl;
-				return;
-			}
-
-			std::cout << "\n=== 방 리스트 ===" << std::endl;
-			for (const auto& Room : GRoomList)
-			{
-				std::cout << "  [" << Room.RoomId << "] " << Room.RoomName << std::endl;
-			}
-		}
-
-		// 원하는 방 선택 (roomId 직접 입력)
-		String SelectInput;
-		std::cout << "입장할 방 ID: ";
-		std::getline(std::cin, SelectInput);
-
-		try
-		{
-			iTargetRoomId = std::stoi(SelectInput);
-		}
-		catch (const std::exception&)
-		{
-			std::cout << "잘못된 입력입니다." << std::endl;
-			return;
-		}
-	}
-	else if (iMenuChoice == 3)
-	{
-		State_ = ClientState::MyPage;
+		State_ = ClientState::Chat;
 		return;
 	}
-	else if (iMenuChoice == 4)
-	{
-		State_ = ClientState::Friend;
-		return;
-	}
-	else
-	{
-		std::cout << "잘못된 선택입니다." << std::endl;
-		return;
-	}
-
-	// 입장 패킷 전송
-	Protocol::C_ENTER_ROOM EnterPkt;
-	EnterPkt.set_roomid(iTargetRoomId);
-	SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(EnterPkt));
-
-	WaitForEnter();
-	State_ = ClientState::Chat;
 }
 
 // 방 입장 + 채팅 루프
 void ClientApp::ChatLoop()
 {
-	// 진입 시 상태 초기화 + 활성화. 이후 IO 스레드의 PrintChatMessage가 프롬프트를 유지해준다.
+	// 진입 시 카톡 레이아웃 셋업: 헤더 박스 + 구분선 + 스크롤 영역 + 입력 프롬프트.
 	{
 		std::lock_guard<std::mutex> Lock(GChatMutex);
 		GChatMode = ChatMode::Normal;
 		GChatInput.clear();
 		GChatActive = true;
-		std::cout << "Chat mode (Tab: 일반/확성기/귓속말 순환, Enter: 전송, exit: 나가기)\n";
-		std::cout << "귓속말 형식: /대상닉네임 메시지\n";
+		DrawChatLayout();
 		RedrawPromptLocked();
 	}
 
@@ -465,7 +669,7 @@ void ClientApp::ChatLoop()
 				{
 					std::lock_guard<std::mutex> Lock(GChatMutex);
 					GChatActive = false;
-					std::cout << "\n" << std::flush;
+					TeardownChatLayout();
 				}
 
 				GExitRoomDone = false;
@@ -497,8 +701,8 @@ void ClientApp::ChatLoop()
 				String Target, Msg;
 				if (!ParseWhisperInput(Input, Target, Msg))
 				{
-					// 형식 오류 — 하늘색 톤 유지하되 빨강으로 경고
-					PrintChatMessage("\033[31m[귓속말] 형식 오류. 사용법: /대상닉네임 메시지\033[0m");
+					// 형식 오류 — 본인 입력에 대한 시스템 경고이므로 왼쪽
+					PrintChatMessage("\033[31m[귓속말] 형식 오류. 사용법: /대상닉네임 메시지\033[0m", false);
 				}
 				else
 				{
@@ -507,8 +711,8 @@ void ClientApp::ChatLoop()
 					WhisperPkt.set_message(Msg);
 					SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(WhisperPkt));
 
-					// 로컬 에코 — 본인 입력 즉시 화면에 (실패 시 서버 에러가 뒤따라 나옴)
-					PrintChatMessage("\033[36m[귓속말] (" + Target + ") " + Msg + "\033[0m");
+					// 로컬 에코 — 본인 발신이라 오른쪽 정렬 + 화살표 → 로 방향 표시
+					PrintChatMessage("\033[36m[귓속말 → " + Target + "] " + Msg + "\033[0m", true);
 				}
 			}
 
@@ -546,341 +750,422 @@ void ClientApp::ChatLoop()
 }
 
 // 마이페이지 루프: 닉네임 수정 / 계정 탈퇴 / 뒤로가기
+// 마이페이지 화면. 닉네임 수정 / 계정 탈퇴 / 뒤로가기.
+// 액션 결과는 LastMessage 로 메뉴 화면에 색상 톤으로 표시.
 void ClientApp::MyPageLoop()
 {
-	std::cout << "=== 마이페이지 ===\n";
-	std::cout << "1. 닉네임 수정\n";
-	std::cout << "2. 계정 탈퇴\n";
-	std::cout << "3. 뒤로가기\n";
-	std::cout << "> ";
+	String LastMessage;
+	const char* LastMessageColor = nullptr;
 
-	String MenuInput;
-	std::getline(std::cin, MenuInput);
-
-	int32 iMenuChoice = 0;
-	try
+	while (State_ == ClientState::MyPage)
 	{
-		iMenuChoice = std::stoi(MenuInput);
-	}
-	catch (const std::exception&)
-	{
-		std::cout << "잘못된 입력입니다." << std::endl;
-		return;
-	}
-
-	if (iMenuChoice == 1)
-	{
-		// 새 닉네임 입력
-		std::cout << "변경할 닉네임을 입력해주세요.\n";
-		std::cout << "> ";
-
-		String NewNickname;
-		std::getline(std::cin, NewNickname);
-
-		if (NewNickname.empty())
+		ConsoleUI::ClearScreen();
+		ConsoleUI::DrawHeaderBox("마이페이지", GMyNickname);
+		std::cout << "\n";
+		std::cout << "  1. 닉네임 수정\n";
+		std::cout << "  2. 계정 탈퇴\n";
+		std::cout << "  3. 뒤로가기\n";
+		std::cout << "\n";
+		ConsoleUI::DrawDivider();
+		if (!LastMessage.empty())
 		{
-			std::cout << "닉네임이 비어있습니다." << std::endl;
-			return;
+			std::cout << (LastMessageColor ? LastMessageColor : "")
+			          << "  " << LastMessage
+			          << ConsoleUI::Color::Reset << "\n\n";
+			LastMessage.clear();
+			LastMessageColor = nullptr;
+		}
+		std::cout << "> " << std::flush;
+
+		String MenuInput;
+		std::getline(std::cin, MenuInput);
+
+		int32 iMenuChoice = 0;
+		try { iMenuChoice = std::stoi(MenuInput); }
+		catch (const std::exception&)
+		{
+			LastMessage = "잘못된 입력입니다.";
+			LastMessageColor = ConsoleUI::Color::Error;
+			continue;
 		}
 
-		// 응답 플래그 리셋 후 송신
-		GUpdateNicknameDone = false;
-		GUpdateNicknameSuccess = false;
-
-		Protocol::C_UPDATE_NICKNAME UpdatePkt;
-		UpdatePkt.set_newnickname(NewNickname);
-		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(UpdatePkt));
-
-		WaitForResponse(GUpdateNicknameDone);
-
-		// 결과 출력
-		if (!GUpdateNicknameDone)
-			std::cout << "서버 응답 없음" << std::endl;
-		else if (!GUpdateNicknameSuccess)
-			std::cout << "닉네임 변경 실패" << std::endl;
-		else
-			std::cout << "닉네임 변경 완료" << std::endl;
-
-		WaitForEnter();
-		State_ = ClientState::Lobby;
-		return;
-	}
-	else if (iMenuChoice == 2)
-	{
-		// 계정 탈퇴 확인
-		std::cout << "정말로 탈퇴하시겠습니까? (y/N)\n";
-		std::cout << "> ";
-
-		String Confirm;
-		std::getline(std::cin, Confirm);
-
-		if (Confirm != "y" && Confirm != "Y")
+		if (iMenuChoice == 1)
 		{
-			std::cout << "탈퇴 취소되었습니다." << std::endl;
-			return;
-		}
+			std::cout << "\n" << ConsoleUI::Color::Hint << "  새 닉네임 : " << ConsoleUI::Color::Reset;
+			String NewNickname;
+			std::getline(std::cin, NewNickname);
 
-		// 응답 플래그 리셋 후 송신
-		GDeleteAccountDone = false;
-		GDeleteAccountSuccess = false;
-
-		Protocol::C_DELETE_ACCOUNT DeletePkt;
-		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(DeletePkt));
-
-		WaitForResponse(GDeleteAccountDone);
-
-		// 결과 출력 + 분기
-		if (!GDeleteAccountDone)
-		{
-			std::cout << "서버 응답 없음" << std::endl;
-			WaitForEnter();
-			return;  // MyPage 유지
-		}
-		if (!GDeleteAccountSuccess)
-		{
-			std::cout << "계정 탈퇴 실패" << std::endl;
-			WaitForEnter();
-			return;  // MyPage 유지
-		}
-
-		// 탈퇴 성공 -> 프로그램 종료
-		std::cout << "계정 탈퇴가 완료되었습니다." << std::endl;
-		WaitForEnter();
-		State_ = ClientState::Exit;
-		return;
-	}
-	else if (iMenuChoice == 3)
-	{
-		State_ = ClientState::Lobby;
-		return;
-	}
-	else
-	{
-		std::cout << "잘못된 선택입니다." << std::endl;
-	}
-}
-
-// 친구 목록 + 친구 추가/요청 확인/친구 삭제 메뉴
-void ClientApp::FriendLoop()
-{
-	// 1. 진입 시 친구 목록 자동 fetch
-	GFriendListDone = false;
-	Protocol::C_GET_FRIEND_LIST GetListPkt;
-	SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(GetListPkt));
-
-	WaitForResponse(GFriendListDone);
-
-	// 2. 목록 출력
-	std::cout << "=== 친구 목록 ===\n";
-	{
-		std::lock_guard<std::mutex> Lock(GFriendListMutex);
-		if (!GFriendListDone)
-			std::cout << "(서버 응답 없음)\n";
-		else if (GFriendList.empty())
-			std::cout << "(친구가 없습니다)\n";
-		else
-		{
-			for (const auto& F : GFriendList)
+			if (NewNickname.empty())
 			{
-				// 온라인: 초록색 online, 오프라인: 빨간색 offline
-				const char* StatusTag = F.IsOnline ? "\033[32monline\033[0m" : "\033[31moffline\033[0m";
-				std::cout << "  - " << F.Email << " (" << F.Nickname << ") " << StatusTag << "\n";
+				LastMessage = "닉네임이 비어있습니다.";
+				LastMessageColor = ConsoleUI::Color::Error;
+				continue;
 			}
-		}
-	}
 
-	// 3. 메뉴
-	std::cout << "\n1. 친구 추가\n";
-	std::cout << "2. 친구 요청 확인\n";
-	std::cout << "3. 친구 삭제\n";
-	std::cout << "4. 뒤로가기\n";
-	std::cout << "> ";
+			GUpdateNicknameDone = false;
+			GUpdateNicknameSuccess = false;
 
-	String MenuInput;
-	std::getline(std::cin, MenuInput);
+			Protocol::C_UPDATE_NICKNAME UpdatePkt;
+			UpdatePkt.set_newnickname(NewNickname);
+			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(UpdatePkt));
+			WaitForResponse(GUpdateNicknameDone);
 
-	int32 iMenuChoice = 0;
-	try
-	{
-		iMenuChoice = std::stoi(MenuInput);
-	}
-	catch (const std::exception&)
-	{
-		std::cout << "잘못된 입력입니다." << std::endl;
-		return;
-	}
-
-	if (iMenuChoice == 1)
-	{
-		// 친구 추가: email 입력 -> C_REQUEST_FRIEND
-		std::cout << "추가할 친구 이메일: ";
-		String Email;
-		std::getline(std::cin, Email);
-
-		if (Email.empty())
-		{
-			std::cout << "이메일이 비어있습니다." << std::endl;
-			return;
-		}
-
-		GRequestFriendDone = false;
-		GRequestFriendSuccess = false;
-
-		Protocol::C_REQUEST_FRIEND Pkt;
-		Pkt.set_email(Email);
-		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
-
-		WaitForResponse(GRequestFriendDone);
-
-		if (!GRequestFriendDone)
-			std::cout << "서버 응답 없음" << std::endl;
-		else if (GRequestFriendSuccess)
-			std::cout << "친구 요청을 보냈습니다." << std::endl;
-
-		WaitForEnter();
-	}
-	else if (iMenuChoice == 2)
-	{
-		// 받은 요청 목록 fetch
-		GPendingFriendsDone = false;
-
-		Protocol::C_GET_PENDING_FRIENDS GetPendingPkt;
-		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(GetPendingPkt));
-
-		WaitForResponse(GPendingFriendsDone);
-
-		std::cout << "\n=== 받은 친구 요청 ===\n";
-		bool bEmpty = false;
-		{
-			std::lock_guard<std::mutex> Lock(GPendingFriendsMutex);
-			if (!GPendingFriendsDone)
+			if (!GUpdateNicknameDone)
 			{
-				std::cout << "(서버 응답 없음)\n";
-				WaitForEnter();
-				return;
+				LastMessage = "서버 응답 없음";
+				LastMessageColor = ConsoleUI::Color::Error;
 			}
-			if (GPendingFriends.empty())
+			else if (!GUpdateNicknameSuccess)
 			{
-				std::cout << "(받은 요청이 없습니다)\n";
-				bEmpty = true;
+				LastMessage = "닉네임 변경 실패: " + GUpdateNicknameMessage;
+				LastMessageColor = ConsoleUI::Color::Error;
 			}
 			else
 			{
-				for (const auto& F : GPendingFriends)
-					std::cout << "  - " << F.Email << " (" << F.Nickname << ")\n";
+				GMyNickname = NewNickname;
+				LastMessage = "닉네임이 변경되었습니다.";
+				LastMessageColor = ConsoleUI::Color::Success;
+			}
+		}
+		else if (iMenuChoice == 2)
+		{
+			std::cout << "\n" << ConsoleUI::Color::Error
+			          << "  정말로 탈퇴하시겠습니까? (y/N) : "
+			          << ConsoleUI::Color::Reset;
+			String Confirm;
+			std::getline(std::cin, Confirm);
+
+			if (Confirm != "y" && Confirm != "Y")
+			{
+				LastMessage = "탈퇴가 취소되었습니다.";
+				LastMessageColor = ConsoleUI::Color::Hint;
+				continue;
+			}
+
+			GDeleteAccountDone = false;
+			GDeleteAccountSuccess = false;
+			Protocol::C_DELETE_ACCOUNT DeletePkt;
+			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(DeletePkt));
+			WaitForResponse(GDeleteAccountDone);
+
+			if (!GDeleteAccountDone)
+			{
+				LastMessage = "서버 응답 없음";
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
+			else if (!GDeleteAccountSuccess)
+			{
+				LastMessage = "계정 탈퇴 실패: " + GDeleteAccountMessage;
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
+			else
+			{
+				ConsoleUI::ClearScreen();
+				ConsoleUI::DrawHeaderBox("Webzen Chat", "계정 탈퇴가 완료되었습니다");
+				std::cout << "\n";
+				std::cout << ConsoleUI::Color::Hint << "  엔터를 눌러 종료..." << ConsoleUI::Color::Reset << std::flush;
+				String Dummy;
+				std::getline(std::cin, Dummy);
+				State_ = ClientState::Exit;
+				return;
+			}
+		}
+		else if (iMenuChoice == 3)
+		{
+			State_ = ClientState::Lobby;
+			return;
+		}
+		else
+		{
+			LastMessage = "잘못된 선택입니다. 1~3 중 선택해주세요.";
+			LastMessageColor = ConsoleUI::Color::Error;
+		}
+	}
+}
+
+// 친구 목록 화면. 진입/액션마다 목록 자동 fetch + 메뉴 분기.
+// State_ 가 Friend 가 아니게 되면(뒤로가기) 외부 메인 루프가 다음 Loop 호출.
+void ClientApp::FriendLoop()
+{
+	String LastMessage;
+	const char* LastMessageColor = nullptr;
+
+	while (State_ == ClientState::Friend)
+	{
+		// 매번 친구 목록 자동 fetch (액션 후에도 최신 상태 반영)
+		GFriendListDone = false;
+		Protocol::C_GET_FRIEND_LIST GetListPkt;
+		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(GetListPkt));
+		WaitForResponse(GFriendListDone);
+
+		ConsoleUI::ClearScreen();
+		ConsoleUI::DrawHeaderBox("친구 목록");
+		std::cout << "\n";
+
+		{
+			std::lock_guard<std::mutex> Lock(GFriendListMutex);
+			if (!GFriendListDone)
+				std::cout << ConsoleUI::Color::Error << "  (서버 응답 없음)" << ConsoleUI::Color::Reset << "\n";
+			else if (GFriendList.empty())
+				std::cout << ConsoleUI::Color::Hint << "  (친구가 없습니다)" << ConsoleUI::Color::Reset << "\n";
+			else
+			{
+				for (const auto& F : GFriendList)
+				{
+					if (F.IsOnline)
+						std::cout << "  " << ConsoleUI::Color::Success << "●" << ConsoleUI::Color::Reset
+						          << " " << F.Nickname
+						          << ConsoleUI::Color::Hint << "  (" << F.Email << ")" << ConsoleUI::Color::Reset
+						          << "\n";
+					else
+						std::cout << "  " << ConsoleUI::Color::Hint << "○ " << F.Nickname
+						          << "  (" << F.Email << ")" << ConsoleUI::Color::Reset
+						          << "\n";
+				}
 			}
 		}
 
-		if (bEmpty)
+		std::cout << "\n";
+		std::cout << "  1. 친구 추가\n";
+		std::cout << "  2. 친구 요청 확인\n";
+		std::cout << "  3. 친구 삭제\n";
+		std::cout << "  4. 뒤로가기\n";
+		std::cout << "\n";
+		ConsoleUI::DrawDivider();
+		if (!LastMessage.empty())
 		{
-			WaitForEnter();
-			return;
+			std::cout << (LastMessageColor ? LastMessageColor : "")
+			          << "  " << LastMessage
+			          << ConsoleUI::Color::Reset << "\n\n";
+			LastMessage.clear();
+			LastMessageColor = nullptr;
 		}
+		std::cout << "> " << std::flush;
 
-		// 액션 메뉴
-		std::cout << "\n1. 수락\n";
-		std::cout << "2. 거절\n";
-		std::cout << "3. 뒤로\n";
-		std::cout << "> ";
+		String MenuInput;
+		std::getline(std::cin, MenuInput);
 
-		String ActionInput;
-		std::getline(std::cin, ActionInput);
-
-		int32 iAction = 0;
-		try
-		{
-			iAction = std::stoi(ActionInput);
-		}
+		int32 iMenuChoice = 0;
+		try { iMenuChoice = std::stoi(MenuInput); }
 		catch (const std::exception&)
 		{
-			std::cout << "잘못된 입력입니다." << std::endl;
-			return;
+			LastMessage = "잘못된 입력입니다.";
+			LastMessageColor = ConsoleUI::Color::Error;
+			continue;
 		}
 
-		if (iAction == 1 || iAction == 2)
+		if (iMenuChoice == 1)
 		{
-			std::cout << (iAction == 1 ? "수락할 " : "거절할 ") << "이메일: ";
+			std::cout << "\n" << ConsoleUI::Color::Hint << "  추가할 친구 이메일 : " << ConsoleUI::Color::Reset;
+			String Email;
+			std::getline(std::cin, Email);
+
+			if (Email.empty())
+			{
+				LastMessage = "이메일이 비어있습니다.";
+				LastMessageColor = ConsoleUI::Color::Error;
+				continue;
+			}
+
+			GRequestFriendDone = false;
+			GRequestFriendSuccess = false;
+
+			Protocol::C_REQUEST_FRIEND Pkt;
+			Pkt.set_email(Email);
+			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
+			WaitForResponse(GRequestFriendDone);
+
+			if (!GRequestFriendDone)
+			{
+				LastMessage = "서버 응답 없음";
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
+			else if (GRequestFriendSuccess)
+			{
+				LastMessage = "친구 요청을 보냈습니다.";
+				LastMessageColor = ConsoleUI::Color::Success;
+			}
+			else
+			{
+				LastMessage = "친구 요청 실패: " + GFriendActionMessage;
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
+		}
+		else if (iMenuChoice == 2)
+		{
+			GPendingFriendsDone = false;
+			Protocol::C_GET_PENDING_FRIENDS GetPendingPkt;
+			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(GetPendingPkt));
+			WaitForResponse(GPendingFriendsDone);
+
+			ConsoleUI::ClearScreen();
+			ConsoleUI::DrawHeaderBox("받은 친구 요청");
+			std::cout << "\n";
+
+			bool bEmpty = false;
+			{
+				std::lock_guard<std::mutex> Lock(GPendingFriendsMutex);
+				if (!GPendingFriendsDone)
+				{
+					std::cout << ConsoleUI::Color::Error << "  (서버 응답 없음)" << ConsoleUI::Color::Reset << "\n";
+					bEmpty = true;
+				}
+				else if (GPendingFriends.empty())
+				{
+					std::cout << ConsoleUI::Color::Hint << "  (받은 요청이 없습니다)" << ConsoleUI::Color::Reset << "\n";
+					bEmpty = true;
+				}
+				else
+				{
+					for (const auto& F : GPendingFriends)
+						std::cout << "  · " << F.Nickname
+						          << ConsoleUI::Color::Hint << "  (" << F.Email << ")"
+						          << ConsoleUI::Color::Reset << "\n";
+				}
+			}
+
+			if (bEmpty)
+			{
+				std::cout << "\n";
+				ConsoleUI::DrawDivider();
+				std::cout << ConsoleUI::Color::Hint << "  엔터를 눌러 돌아가기..." << ConsoleUI::Color::Reset << std::flush;
+				String Dummy;
+				std::getline(std::cin, Dummy);
+				continue;
+			}
+
+			std::cout << "\n";
+			std::cout << "  1. 수락\n";
+			std::cout << "  2. 거절\n";
+			std::cout << "  3. 뒤로\n";
+			std::cout << "\n";
+			ConsoleUI::DrawDivider();
+			std::cout << "> " << std::flush;
+
+			String ActionInput;
+			std::getline(std::cin, ActionInput);
+
+			int32 iAction = 0;
+			try { iAction = std::stoi(ActionInput); }
+			catch (const std::exception&)
+			{
+				LastMessage = "잘못된 입력입니다.";
+				LastMessageColor = ConsoleUI::Color::Error;
+				continue;
+			}
+
+			if (iAction != 1 && iAction != 2)
+				continue;  // 뒤로 또는 잘못된 번호 -> 메인 메뉴
+
+			std::cout << "\n" << ConsoleUI::Color::Hint
+			          << (iAction == 1 ? "  수락할 이메일 : " : "  거절할 이메일 : ")
+			          << ConsoleUI::Color::Reset;
 			String TargetEmail;
 			std::getline(std::cin, TargetEmail);
 
 			if (TargetEmail.empty())
 			{
-				std::cout << "이메일이 비어있습니다." << std::endl;
-				return;
+				LastMessage = "이메일이 비어있습니다.";
+				LastMessageColor = ConsoleUI::Color::Error;
+				continue;
 			}
 
 			if (iAction == 1)
 			{
 				GAcceptFriendDone = false;
 				GAcceptFriendSuccess = false;
-
 				Protocol::C_ACCEPT_FRIEND AcceptPkt;
 				AcceptPkt.set_email(TargetEmail);
 				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(AcceptPkt));
-
 				WaitForResponse(GAcceptFriendDone);
 
 				if (!GAcceptFriendDone)
-					std::cout << "서버 응답 없음" << std::endl;
+				{
+					LastMessage = "서버 응답 없음";
+					LastMessageColor = ConsoleUI::Color::Error;
+				}
 				else if (GAcceptFriendSuccess)
-					std::cout << "친구 요청을 수락했습니다." << std::endl;
+				{
+					LastMessage = "친구 요청을 수락했습니다.";
+					LastMessageColor = ConsoleUI::Color::Success;
+				}
+				else
+				{
+					LastMessage = "수락 실패: " + GFriendActionMessage;
+					LastMessageColor = ConsoleUI::Color::Error;
+				}
 			}
 			else
 			{
 				GRejectFriendDone = false;
 				GRejectFriendSuccess = false;
-
 				Protocol::C_REJECT_FRIEND RejectPkt;
 				RejectPkt.set_email(TargetEmail);
 				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(RejectPkt));
-
 				WaitForResponse(GRejectFriendDone);
 
 				if (!GRejectFriendDone)
-					std::cout << "서버 응답 없음" << std::endl;
+				{
+					LastMessage = "서버 응답 없음";
+					LastMessageColor = ConsoleUI::Color::Error;
+				}
 				else if (GRejectFriendSuccess)
-					std::cout << "친구 요청을 거절했습니다." << std::endl;
+				{
+					LastMessage = "친구 요청을 거절했습니다.";
+					LastMessageColor = ConsoleUI::Color::Success;
+				}
+				else
+				{
+					LastMessage = "거절 실패: " + GFriendActionMessage;
+					LastMessageColor = ConsoleUI::Color::Error;
+				}
+			}
+		}
+		else if (iMenuChoice == 3)
+		{
+			std::cout << "\n" << ConsoleUI::Color::Hint << "  삭제할 친구 이메일 : " << ConsoleUI::Color::Reset;
+			String Email;
+			std::getline(std::cin, Email);
+
+			if (Email.empty())
+			{
+				LastMessage = "이메일이 비어있습니다.";
+				LastMessageColor = ConsoleUI::Color::Error;
+				continue;
 			}
 
-			WaitForEnter();
-		}
-	}
-	else if (iMenuChoice == 3)
-	{
-		// 친구 삭제: email 입력 -> C_REMOVE_FRIEND
-		std::cout << "삭제할 친구 이메일: ";
-		String Email;
-		std::getline(std::cin, Email);
+			GRemoveFriendDone = false;
+			GRemoveFriendSuccess = false;
+			Protocol::C_REMOVE_FRIEND Pkt;
+			Pkt.set_email(Email);
+			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
+			WaitForResponse(GRemoveFriendDone);
 
-		if (Email.empty())
+			if (!GRemoveFriendDone)
+			{
+				LastMessage = "서버 응답 없음";
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
+			else if (GRemoveFriendSuccess)
+			{
+				LastMessage = "친구를 삭제했습니다.";
+				LastMessageColor = ConsoleUI::Color::Success;
+			}
+			else
+			{
+				LastMessage = "친구 삭제 실패: " + GFriendActionMessage;
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
+		}
+		else if (iMenuChoice == 4)
 		{
-			std::cout << "이메일이 비어있습니다." << std::endl;
+			State_ = ClientState::Lobby;
 			return;
 		}
-
-		GRemoveFriendDone = false;
-		GRemoveFriendSuccess = false;
-
-		Protocol::C_REMOVE_FRIEND Pkt;
-		Pkt.set_email(Email);
-		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(Pkt));
-
-		WaitForResponse(GRemoveFriendDone);
-
-		if (!GRemoveFriendDone)
-			std::cout << "서버 응답 없음" << std::endl;
-		else if (GRemoveFriendSuccess)
-			std::cout << "친구를 삭제했습니다." << std::endl;
-
-		WaitForEnter();
-	}
-	else if (iMenuChoice == 4)
-	{
-		State_ = ClientState::Lobby;
-		return;
-	}
-	else
-	{
-		std::cout << "잘못된 선택입니다." << std::endl;
+		else
+		{
+			LastMessage = "잘못된 선택입니다. 1~4 중 선택해주세요.";
+			LastMessageColor = ConsoleUI::Color::Error;
+		}
 	}
 }

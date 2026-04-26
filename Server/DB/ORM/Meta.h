@@ -62,7 +62,6 @@ struct RelationMeta
     std::function<void(void*, void*)> BindObj;
 };
 
-// 얜 그냥 설명서 
 struct EntityMeta
 {
     std::string TableName; // 테이블 이름

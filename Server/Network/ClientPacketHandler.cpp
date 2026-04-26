@@ -293,7 +293,6 @@ bool Handle_C_CHAT(SharedPtr<Session> SessionPtr, Protocol::C_CHAT& Pkt)
 // 확성기 요청을 처리한다. 모든 방에 S_SHOUT 브로드캐스트.
 bool Handle_C_SHOUT(SharedPtr<Session> SessionPtr, Protocol::C_SHOUT& Pkt)
 {
-	// TODO: RoomManager 스냅샷 순회 + 각 방 JobQueue에 broadcast job push
 	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
 
 	Protocol::S_SHOUT ShoutPkt;

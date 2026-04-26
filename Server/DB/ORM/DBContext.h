@@ -298,7 +298,6 @@ class DBContext
                         context->RegisterInIdentityMap(inc.Relation->TargetType, targetPk, targetObj);
                     }
 
-                    // TODO: obj 의 Navigation 슬롯에 targetObj 꽂기
                     inc.Relation->BindObj(obj, targetObj);
                     
                     offset += targetMeta.Fields.size();
