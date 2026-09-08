@@ -248,3 +248,21 @@ message S_TRANSFER_RECEIVED
 	int64 amount = 2;
 	int64 my_balance = 3;
 }
+
+// ==========================
+// AI 채팅 (Claude API 스트리밍)
+// ==========================
+
+message C_AI_CHAT
+{
+	string message = 1;
+}
+
+// 서버가 API 의 SSE 조각을 받는 대로 text 를 실어 보낸다. done = true 인 마지막 패킷에 success / error_msg.
+message S_AI_CHAT
+{
+	string text = 1;
+	bool done = 2;
+	bool success = 3;
+	string error_msg = 4;
+}

@@ -17,6 +17,9 @@ public:
 	PlayerInfo& GetPlayerInfo() { return Info; }
 	uint64 GetPlayerId() const { return Info.PlayerId; }
 
+	// AI 응답이 진행 중인지. 한 세션에 하나만 (스트림이 섞이지 않게).
+	std::atomic<bool> AiBusy{ false };
+
 protected:
 	void OnConnected() override;
 	int32 OnReceived(BYTE* Buffer, int32 iLen) override;

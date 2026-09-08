@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -196,10 +196,13 @@
     <ClInclude Include="DB\ORM\Sql.h" />
     <ClInclude Include="DB\ORM\Types.h" />
     <ClInclude Include="DB\Entities\Entities.h" />
-    <ClInclude Include="DB\Entities\Person.h" />
     <ClInclude Include="DB\Generated\EntitiesGenerated.h" />
     <ClInclude Include="Security\InputValidator.h" />
     <ClInclude Include="Security\PasswordHasher.h" />
+    <ClInclude Include="AI\SseParser.h" />
+    <ClInclude Include="AI\HttpClient.h" />
+    <ClInclude Include="AI\ClaudeClient.h" />
+    <ClInclude Include="AI\AiChatService.h" />
     <None Include="..\Proto\Protocol.proto" />
   </ItemGroup>
   <ItemGroup>
@@ -218,6 +221,9 @@
     <ClCompile Include="DB\ORM\Property.cpp" />
     <ClCompile Include="Security\InputValidator.cpp" />
     <ClCompile Include="Security\PasswordHasher.cpp" />
+    <ClCompile Include="AI\HttpClient.cpp" />
+    <ClCompile Include="AI\ClaudeClient.cpp" />
+    <ClCompile Include="AI\AiChatService.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ServerCore\ServerCore.vcxproj">

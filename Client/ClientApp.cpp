@@ -118,6 +118,7 @@ namespace
 		{
 		case ChatMode::Shout:   Tag = "\033[38;5;208m[확성기]\033[0m"; break;
 		case ChatMode::Whisper: Tag = "\033[36m[귓속말]\033[0m";       break;
+		case ChatMode::AI:      Tag = "\033[35m[AI]\033[0m";           break;
 		default: break;
 		}
 		ConsoleUI::MoveCursor(ChatPromptRow(), 1);
@@ -637,12 +638,13 @@ void ClientApp::ChatLoop()
 		if (ch == L'\t')
 		{
 			std::lock_guard<std::mutex> Lock(GChatMutex);
-			// Normal → Shout → Whisper → Normal 순환
+			// Normal → Shout → Whisper → AI → Normal 순환
 			switch (GChatMode)
 			{
 			case ChatMode::Normal:  GChatMode = ChatMode::Shout;   break;
 			case ChatMode::Shout:   GChatMode = ChatMode::Whisper; break;
-			case ChatMode::Whisper: GChatMode = ChatMode::Normal;  break;
+			case ChatMode::Whisper: GChatMode = ChatMode::AI;      break;
+			case ChatMode::AI:      GChatMode = ChatMode::Normal;  break;
 			}
 			RedrawPromptLocked();
 			continue;
@@ -695,6 +697,15 @@ void ClientApp::ChatLoop()
 				Protocol::C_SHOUT ShoutPkt;
 				ShoutPkt.set_msg(Input);
 				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(ShoutPkt));
+			}
+			else if (CurrentMode == ChatMode::AI)
+			{
+				Protocol::C_AI_CHAT AiPkt;
+				AiPkt.set_message(Input);
+				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(AiPkt));
+
+				// 로컬 에코 — 본인 발신이라 오른쪽. 응답은 S_AI_CHAT 조각이 오는 대로 왼쪽에 흐른다.
+				PrintChatMessage("\033[35m" + Input + " [나 → AI]\033[0m", true);
 			}
 			else // Whisper
 			{

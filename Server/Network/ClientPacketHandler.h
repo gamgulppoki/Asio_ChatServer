@@ -51,6 +51,8 @@ enum : uint16
 	PKT_C_TRANSFER = 1036,
 	PKT_S_TRANSFER = 1037,
 	PKT_S_TRANSFER_RECEIVED = 1038,
+	PKT_C_AI_CHAT = 1039,
+	PKT_S_AI_CHAT = 1040,
 };
 
 // Forward declarations
@@ -74,6 +76,7 @@ bool Handle_C_GET_FRIEND_LIST(SharedPtr<Session> SessionPtr, Protocol::C_GET_FRI
 bool Handle_C_REMOVE_FRIEND(SharedPtr<Session> SessionPtr, Protocol::C_REMOVE_FRIEND& Pkt);
 bool Handle_C_GET_BALANCE(SharedPtr<Session> SessionPtr, Protocol::C_GET_BALANCE& Pkt);
 bool Handle_C_TRANSFER(SharedPtr<Session> SessionPtr, Protocol::C_TRANSFER& Pkt);
+bool Handle_C_AI_CHAT(SharedPtr<Session> SessionPtr, Protocol::C_AI_CHAT& Pkt);
 
 class ClientPacketHandler
 {
@@ -159,6 +162,10 @@ public:
 		{
 			return HandlePacket<Protocol::C_TRANSFER>(Handle_C_TRANSFER, SessionPtr, Buffer, iLen);
 		};
+		GPacketHandler[PKT_C_AI_CHAT] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::C_AI_CHAT>(Handle_C_AI_CHAT, SessionPtr, Buffer, iLen);
+		};
 	}
 
 	static bool HandlePacket(SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
@@ -187,6 +194,7 @@ public:
 	static SendBufferRef MakeSendBuffer(Protocol::S_GET_BALANCE& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_GET_BALANCE); }
 	static SendBufferRef MakeSendBuffer(Protocol::S_TRANSFER& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_TRANSFER); }
 	static SendBufferRef MakeSendBuffer(Protocol::S_TRANSFER_RECEIVED& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_TRANSFER_RECEIVED); }
+	static SendBufferRef MakeSendBuffer(Protocol::S_AI_CHAT& Pkt) { return _MakeSendBuffer(Pkt, PKT_S_AI_CHAT); }
 
 private:
 	template<typename PacketType, typename ProcessFunc>

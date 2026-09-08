@@ -1,5 +1,6 @@
 #include "ServerPacketHandler.h"
 #include "ClientApp.h"
+#include "ConsoleUI.h"
 #include "Session.h"
 #include <spdlog/spdlog.h>
 #include <iostream>
@@ -280,5 +281,68 @@ bool Handle_S_TRANSFER_RECEIVED(SharedPtr<Session> SessionPtr, Protocol::S_TRANS
 	PrintChatMessage("\033[32m[포인트] " + Pkt.from_name() + " 님이 "
 		+ std::to_string(Pkt.amount()) + " P 를 보냈습니다. (잔고 "
 		+ std::to_string(Pkt.my_balance()) + " P)\033[0m", false);
+	return true;
+}
+
+// ==========================
+// AI 채팅 (스트리밍 수신)
+// ==========================
+
+namespace
+{
+	std::mutex GAiMutex;
+	String     GAiPending;          // 아직 화면에 안 내보낸 조각
+	bool       GAiFirstLine = true; // 답변의 첫 줄에만 [AI] 태그, 이후 줄은 들여쓰기
+
+	void FlushAiLine(const String& Line)
+	{
+		PrintChatMessage(String("\033[35m") + (GAiFirstLine ? "[AI] " : "     ") + Line + "\033[0m", false);
+		GAiFirstLine = false;
+	}
+
+	// UTF-8 경계를 지켜 앞부분을 잘라낸다. 공백이 있으면 거기서, 없으면 바이트 상한에서.
+	String CutFront(String& Buf, int32 iMaxWidth)
+	{
+		size_t cut = Buf.rfind(' ');
+		if (cut == String::npos || cut == 0 || ConsoleUI::DisplayWidth(Buf.substr(0, cut)) > iMaxWidth)
+		{
+			cut = std::min<size_t>(Buf.size(), 120);
+			while (cut > 0 && (static_cast<unsigned char>(Buf[cut]) & 0xC0) == 0x80) --cut;
+		}
+		String Head = Buf.substr(0, cut);
+		Buf.erase(0, (cut < Buf.size() && Buf[cut] == ' ') ? cut + 1 : cut);
+		return Head;
+	}
+}
+
+// 서버가 API 의 텍스트 조각을 받는 대로 보내준다. 콘솔은 줄 단위로 그리므로
+// 줄바꿈이 오거나 한 줄 폭을 넘을 때마다 내보낸다 (글자 단위 커서 제어 없이도 "타이핑되듯" 보인다).
+bool Handle_S_AI_CHAT(SharedPtr<Session> SessionPtr, Protocol::S_AI_CHAT& Pkt)
+{
+	std::lock_guard<std::mutex> Lock(GAiMutex);
+	const int32 iMaxWidth = std::max(30, ConsoleUI::GetSize().Width - 12);
+
+	GAiPending += Pkt.text();
+
+	size_t nl;
+	while ((nl = GAiPending.find('\n')) != String::npos)
+	{
+		FlushAiLine(GAiPending.substr(0, nl));
+		GAiPending.erase(0, nl + 1);
+	}
+	while (ConsoleUI::DisplayWidth(GAiPending) > iMaxWidth)
+		FlushAiLine(CutFront(GAiPending, iMaxWidth));
+
+	if (Pkt.done())
+	{
+		if (!GAiPending.empty())
+		{
+			FlushAiLine(GAiPending);
+			GAiPending.clear();
+		}
+		if (!Pkt.success())
+			PrintChatMessage("\033[31m[AI] 오류: " + Pkt.error_msg() + "\033[0m", false);
+		GAiFirstLine = true;
+	}
 	return true;
 }

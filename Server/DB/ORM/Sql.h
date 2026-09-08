@@ -192,12 +192,18 @@ inline std::string update_sql(const EntityMeta& meta, const std::vector<size_t>&
 // includes 비어있으면 단일 테이블 SELECT, 있으면 JOIN 자동 포함.
 // alias 규칙: 메인은 t0, Include 는 순번대로 t1, t2, ... (같은 타겟 테이블 중복 조인 시 구분용)
 // tableHint: 메인 테이블(t0) 에 붙는 WITH (...) 힌트. 비어 있으면 힌트 없음. Hint::NoLock / Hint::UpdLock 참고.
+// orderBy / orderDesc / top: ORDER BY t0.[col] [DESC] 와 SELECT TOP (n). "최근 N 건" 조회용.
 inline std::string select_sql(const EntityMeta& meta,
                               const std::vector<Condition>& conditions,
                               const std::vector<IncludeEntry>& includes = {},
-                              const std::string& tableHint = "")
+                              const std::string& tableHint = "",
+                              const std::string& orderBy = "",
+                              bool orderDesc = false,
+                              int32 top = 0)
 {
     std::string sql = "SELECT ";
+    if (top > 0)
+        sql += "TOP (" + std::to_string(top) + ") ";
 
     // [1] SELECT 절 — 메인 테이블 컬럼 (t0.*)
     for (size_t i = 0; i < meta.Fields.size(); ++i)
@@ -247,6 +253,10 @@ inline std::string select_sql(const EntityMeta& meta,
             sql += "t0.[" + c.column + "] " + op + " ?";
         }
     }
+
+    // [6] ORDER BY 절
+    if (!orderBy.empty())
+        sql += " ORDER BY t0.[" + orderBy + "]" + (orderDesc ? " DESC" : " ASC");
 
     sql += ";";
     return sql;

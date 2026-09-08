@@ -49,8 +49,54 @@ template<> struct Col<Friendship>
     static inline ColumnRef<std::string> Status{"Status"};
 };
 
+template<> inline void describe_entity<AiMessage>(EntityBuilder<AiMessage>& b)
+{
+    b.field("Id", &AiMessage::Id);
+    b.field("UserId", &AiMessage::UserId);
+    b.field("Role", &AiMessage::Role, 16);
+    b.field("Content", &AiMessage::Content, 4000);
+    b.field("CreatedAt", &AiMessage::CreatedAt);
+    b.primary_key("Id");
+    b.index("IX_AiMessage_UserId_CreatedAt", false, { "UserId", "CreatedAt" });
+    b.table("AiMessage");
+}
+
+template<> struct Col<AiMessage>
+{
+    static inline ColumnRef<int64> Id{"Id"};
+    static inline ColumnRef<int64> UserId{"UserId"};
+    static inline ColumnRef<std::string> Role{"Role"};
+    static inline ColumnRef<std::string> Content{"Content"};
+    static inline ColumnRef<int64> CreatedAt{"CreatedAt"};
+};
+
+template<> inline void describe_entity<AiUsage>(EntityBuilder<AiUsage>& b)
+{
+    b.field("Id", &AiUsage::Id);
+    b.field("UserId", &AiUsage::UserId);
+    b.field("Day", &AiUsage::Day);
+    b.field("Calls", &AiUsage::Calls);
+    b.field("InputTokens", &AiUsage::InputTokens);
+    b.field("OutputTokens", &AiUsage::OutputTokens);
+    b.primary_key("Id");
+    b.index("UX_AiUsage_UserId_Day", true, { "UserId", "Day" });
+    b.table("AiUsage");
+}
+
+template<> struct Col<AiUsage>
+{
+    static inline ColumnRef<int64> Id{"Id"};
+    static inline ColumnRef<int64> UserId{"UserId"};
+    static inline ColumnRef<int64> Day{"Day"};
+    static inline ColumnRef<int64> Calls{"Calls"};
+    static inline ColumnRef<int64> InputTokens{"InputTokens"};
+    static inline ColumnRef<int64> OutputTokens{"OutputTokens"};
+};
+
 inline void register_all_generated()
 {
     get_entity_meta<User>();
     get_entity_meta<Friendship>();
+    get_entity_meta<AiMessage>();
+    get_entity_meta<AiUsage>();
 }

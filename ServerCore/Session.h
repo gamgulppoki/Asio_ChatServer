@@ -17,6 +17,9 @@ public:
 	void Send(SendBufferRef Buffer);
 	void Disconnect();
 
+	// 세션 strand. 이 세션에 묶인 비동기 작업(예: AI 응답 스트리밍)을 같은 직렬화 영역에서 돌릴 때 쓴다.
+	asio::any_io_executor GetExecutor() const { return SessionStrand; }
+
 protected:
 	virtual void OnConnected() {}
 	virtual int32 OnReceived(BYTE* Buffer, int32 iLen) { return iLen; }

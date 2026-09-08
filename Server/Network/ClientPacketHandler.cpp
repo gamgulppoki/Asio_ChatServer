@@ -16,6 +16,7 @@
 #include "DB/Entities/Entities.h"
 #include "DB/ORM/DBContext.h"
 #include "DB/Generated/EntitiesGenerated.h"
+#include "AI/AiChatService.h"
 
 namespace
 {
@@ -1146,4 +1147,61 @@ bool Handle_C_TRANSFER(SharedPtr<Session> SessionPtr, Protocol::C_TRANSFER& Pkt)
 	}
 
 	return Fail("Transfer failed after retries. Please try again.");
+}
+
+// ==========================
+// AI 채팅
+// ==========================
+
+// 요청을 받으면 세션 strand 위에 AI 코루틴을 띄우고 바로 돌아간다.
+// 응답은 AiChatService 가 S_AI_CHAT 조각으로 push 한다. 이 핸들러는 API 를 기다리지 않는다.
+bool Handle_C_AI_CHAT(SharedPtr<Session> SessionPtr, Protocol::C_AI_CHAT& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+
+	auto Fail = [&](const std::string& Msg)
+	{
+		Protocol::S_AI_CHAT ResPkt;
+		ResPkt.set_done(true);
+		ResPkt.set_success(false);
+		ResPkt.set_error_msg(Msg);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	};
+
+	if (GameSessionPtr->GetPlayerInfo().PlayerId == 0)
+		return Fail("Not logged in");
+
+	const std::string& Message = Pkt.message();
+	if (Message.empty() || Message.size() > 2000)
+		return Fail("Message must be 1-2000 bytes");
+
+	if (!AiChatService::IsEnabled())
+		return Fail("AI chat is disabled on this server (no API key)");
+
+	// 이전 응답이 아직 흐르는 중이면 거절 (두 스트림이 섞이면 화면이 깨진다)
+	if (GameSessionPtr->AiBusy.exchange(true))
+		return Fail("Previous AI reply is still in progress");
+
+	asio::co_spawn(GameSessionPtr->GetExecutor(),
+		[GameSessionPtr, Message]() -> asio::awaitable<void>
+		{
+			try
+			{
+				co_await AiChatService::Run(GameSessionPtr, Message);
+			}
+			catch (const std::exception& e)
+			{
+				spdlog::error("[AI] unhandled: {}", e.what());
+				Protocol::S_AI_CHAT ResPkt;
+				ResPkt.set_done(true);
+				ResPkt.set_success(false);
+				ResPkt.set_error_msg("Internal error");
+				GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+			}
+			GameSessionPtr->AiBusy = false;
+		},
+		asio::detached);
+
+	return true;
 }

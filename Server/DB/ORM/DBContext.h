@@ -95,6 +95,24 @@ class DBContext
             return copy;
         }
 
+        // 정렬. ORDER BY t0.[col] [DESC]. 메인 테이블 컬럼만 지원.
+        template<typename V>
+        DbSet<T> OrderBy(const ColumnRef<V>& column, bool desc = false) const
+        {
+            DbSet<T> copy = *this;
+            copy.OrderColumn = column.name;
+            copy.bOrderDesc  = desc;
+            return copy;
+        }
+
+        // 상위 N 행. SELECT TOP (n). OrderBy 와 함께 써야 "최근 N 건" 이 된다.
+        DbSet<T> Take(int32 n) const
+        {
+            DbSet<T> copy = *this;
+            copy.TopCount = n;
+            return copy;
+        }
+
         std::vector<T*> ToList()
         {
             std::vector<T*> results;
@@ -104,8 +122,8 @@ class DBContext
 
             const auto& meta = MetaRegistry::Instance().Entities.at(typeid(T));
 
-            // 1. SELECT SQL 생성 (Includes 있으면 JOIN 자동 포함, TableHint 있으면 WITH 절)
-            std::string sql = select_sql(meta, Conditions, Includes, TableHint);
+            // 1. SELECT SQL 생성 (Includes → JOIN, TableHint → WITH, OrderBy/Take → ORDER BY / TOP)
+            std::string sql = select_sql(meta, Conditions, Includes, TableHint, OrderColumn, bOrderDesc, TopCount);
 
             // 2. WHERE 파라미터 바인딩 (값/lenInd는 Execute까지 살아있어야 함)
             std::vector<DbValue> paramVals;
@@ -328,6 +346,9 @@ class DBContext
         std::vector<Condition> Conditions;
         std::vector<IncludeEntry> Includes;
         std::string TableHint;
+        std::string OrderColumn;
+        bool  bOrderDesc = false;
+        int32 TopCount   = 0;
     };
     
 public:

@@ -7,6 +7,7 @@
 #include "DB/DBConnectionPool.h"
 #include "DB/ORM/Sql.h"
 #include "DB/Generated/EntitiesGenerated.h"
+#include "AI/AiChatService.h"
 #include <spdlog/spdlog.h>
 #include <thread>
 
@@ -48,6 +49,7 @@ void ServerApp::Run()
 	}
 
 	InitDB();
+	AiChatService::Init();   // ANTHROPIC_API_KEY 없으면 기능만 꺼지고 서버는 뜬다
 	//InitRooms();
 
 	auto Context = std::make_unique<IoContext>();

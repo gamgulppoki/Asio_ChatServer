@@ -4,6 +4,8 @@
   "dependencies": [
     "asio",
     "spdlog",
-    "protobuf"
+    "protobuf",
+    "openssl",
+    "nlohmann-json"
   ]
 }
