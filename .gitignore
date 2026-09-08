@@ -21,6 +21,7 @@ vcpkg_installed/
 .idea/
 
 # Misc
+__pycache__/
 *.log
 
 # Markdown (README only)

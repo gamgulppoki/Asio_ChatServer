@@ -1,5 +1,5 @@
 {
-  "name": "webzen-chat",
+  "name": "chat-server",
   "version-string": "0.1.0",
   "dependencies": [
     "asio",
