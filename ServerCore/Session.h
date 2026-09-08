@@ -27,6 +27,12 @@ private:
 	asio::awaitable<void> DoWrite();
 
 	TcpSocket Socket;
+
+	// 세션의 모든 핸들러(DoRead/DoWrite 코루틴, Send 의 post)가 이 strand 위에서만 돈다.
+	// io_context 를 워커 N 개가 poll 하므로, strand 가 없으면 Send() 의 post 와 DoWrite 가
+	// 서로 다른 스레드에서 WriteQueue 를 동시에 만진다 (부하 테스트에서 실제로 크래시·유실이 났다).
+	Strand SessionStrand;
+
 	RecvBuffer RecvBuf;
 	Queue<SendBufferRef> WriteQueue;
 	bool bIsWriting = false;

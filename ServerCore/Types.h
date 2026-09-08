@@ -92,6 +92,7 @@ using TcpSocket = asio::ip::tcp::socket;
 using TcpAcceptor = asio::ip::tcp::acceptor;
 using TcpEndpoint = asio::ip::tcp::endpoint;
 using TcpResolver = asio::ip::tcp::resolver;
+using Strand = asio::strand<asio::any_io_executor>;   // 세션 단위 직렬화 executor
 using ErrorCode = std::error_code;
 
 // =============================================

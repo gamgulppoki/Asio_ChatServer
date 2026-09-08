@@ -187,10 +187,32 @@ class ChatClient:
             return self.wait_for(recv_name)
 
     def close(self):
+        self._streaming = False
         try:
             self.sock.close()
         except OSError:
             pass
+
+    # ---- 스트리밍 모드 (부하 테스트용) ----
+    # request/wait_for 대신 백그라운드 스레드가 모든 수신 프레임을 callback(name, fields) 으로 넘긴다.
+    # 방 입장 후 브로드캐스트를 계속 받아야 하는 채팅 부하 테스트에서 쓴다. 이후 request() 는 쓰지 말 것.
+    def start_streaming(self, callback):
+        self._streaming = True
+
+        def loop():
+            try:
+                while self._streaming:
+                    name, fields = self._recv_frame()
+                    callback(name, fields)
+            except (ConnectionError, OSError):
+                pass
+
+        self._reader = threading.Thread(target=loop, daemon=True)
+        self._reader.start()
+
+    def send_async(self, pkt_name: str, fields: dict | None = None):
+        with self.lock:
+            self.send(pkt_name, fields)
 
     # ---- 도메인 API ----
     def register(self, name: str, email: str, password: str) -> tuple[bool, str]:
@@ -207,6 +229,14 @@ class ChatClient:
     def get_balance(self) -> int | None:
         r = self.request("C_GET_BALANCE", {}, "S_GET_BALANCE")
         return int(r.get(2, 0)) if r.get(1, 0) else None
+
+    def create_room(self, name: str) -> int | None:
+        r = self.request("C_CREATE_ROOM", {1: name}, "S_CREATE_ROOM")
+        return int(r.get(2, 0)) if r.get(1, 0) else None
+
+    def enter_room(self, room_id: int) -> bool:
+        r = self.request("C_ENTER_ROOM", {1: room_id}, "S_ENTER_ROOM")
+        return bool(r.get(1, 0))
 
     def transfer(self, target_nickname: str, amount: int) -> dict:
         r = self.request("C_TRANSFER", {1: target_nickname, 2: amount}, "S_TRANSFER")
