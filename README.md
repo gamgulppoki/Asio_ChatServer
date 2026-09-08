@@ -15,12 +15,13 @@ C++20 으로 만든 멀티스레드 채팅 서버. 채팅이라는 가벼운 도
 5. [보안](#보안)
 6. [인덱스와 락 힌트](#인덱스와-락-힌트)
 7. [서버 인프라와 락 전략](#서버-인프라와-락-전략)
-8. [자체 ORM (9-layer)](#자체-orm-9-layer)
-9. [주요 기능](#주요-기능)
-10. [성능 측정](#성능-측정) — 진행 중
-11. [로드맵](#로드맵)
-12. [알려진 한계 / 개선 여지](#알려진-한계--개선-여지)
-13. [디렉토리 구조](#디렉토리-구조)
+8. [AI 채팅 — 외부 API 를 비동기로 붙이기](#ai-채팅--외부-api-를-비동기로-붙이기)
+9. [자체 ORM (9-layer)](#자체-orm-9-layer)
+10. [주요 기능](#주요-기능)
+11. [성능 측정](#성능-측정)
+12. [로드맵](#로드맵)
+13. [알려진 한계 / 개선 여지](#알려진-한계--개선-여지)
+14. [디렉토리 구조](#디렉토리-구조)
 
 ---
 
@@ -38,7 +39,8 @@ C++20 으로 만든 멀티스레드 채팅 서버. 채팅이라는 가벼운 도
 | 채널 (HTS / MTS) | 고객이 직접 조작하는 창구 | Windows C++ 콘솔 클라이언트, protobuf 바이너리 프로토콜, 패킷 핸들러 자동 생성 |
 | 원장 (계정계) | 계좌·잔고·체결의 진실. 정합성이 생명 | `DBContext` 트랜잭션 단위 flush, OCC 충돌 감지, 커넥션 풀 RAII, prepared statement |
 | 대량 트랜잭션 처리 | 요청이 몰려도 지연 없이 | IOCP 코루틴, 자원별 mutex / shared_mutex 구분, TLS 송신 버퍼, Room 단위 JobQueue 직렬화 |
-| 보안 · 장애 대응 | 인젝션 차단, 장애 격리와 복구 | prepared statement, 화이트리스트 입력 검증, 실패 시 전체 Rollback, 풀 반납 보장 |
+| 보안 · 장애 대응 | 인젝션 차단, 장애 격리와 복구 | prepared statement, 화이트리스트 입력 검증, bcrypt, 실패 시 전체 Rollback, 풀 반납 보장 |
+| AI 서비스 | 고객 응대·정보 제공 | Claude API 를 같은 io_context 위에서 비동기 스트리밍, 이력 DB 저장, 유저·일 단위 한도, 실패 분류·재시도 |
 
 ---
 
@@ -50,6 +52,8 @@ C++20 으로 만든 멀티스레드 채팅 서버. 채팅이라는 가벼운 도
 - **DB**: MSSQL + ODBC
 - **로깅**: spdlog
 - **직렬화**: protobuf (패킷 자동 생성 파이프라인)
+- **비밀번호 해싱**: bcrypt (Openwall crypt_blowfish 를 `ServerCore/ThirdParty/bcrypt` 에 vendoring)
+- **AI**: Claude Messages API (raw HTTP), asio::ssl + OpenSSL, nlohmann-json
 - **플랫폼**: Windows 전용
 
 ---
@@ -73,9 +77,10 @@ vcpkg install
 ```
 
 연결 문자열은 `Server/ServerApp.cpp` 상단에 있다. 로컬 `.\SQLEXPRESS` + Windows 인증이 기본값이다.
+AI 채팅을 쓰려면 `ANTHROPIC_API_KEY` 환경 변수가 필요하다 (없으면 그 기능만 꺼진다). 상세는 [AI 채팅](#ai-채팅--외부-api-를-비동기로-붙이기).
 
 클라이언트 콘솔 사용법:
-- `Tab` — 채팅 모드 순환 (일반 / 확성기 / 귓속말)
+- `Tab` — 채팅 모드 순환 (일반 / 확성기 / 귓속말 / AI)
 - 귓속말 모드에서 `/닉네임 메시지`
 - 로비에서 방 생성 / 방 리스트 / 친구 / 마이페이지 / 종료
 
@@ -143,7 +148,7 @@ return Fail("Transfer failed after retries");
 |---|---|---|
 | SQL 인젝션 | ORM 의 SQL 빌더가 값을 문자열에 섞지 않는다. 모든 값은 `?` 자리표시자 + ODBC `BindParam` 타입별 바인딩 | 개발자가 실수할 경로 자체를 없앤다 |
 | 입력 검증 | 이메일은 정규식, 이름·비밀번호는 길이 규칙. 허용 규칙만 통과시키는 화이트리스트 방식 | 금지 문자를 나열하는 블랙리스트는 빠뜨리기 쉽다 |
-| 비밀번호 | **현재 평문 저장·비교 (미해결)**. argon2id 해싱 도입이 로드맵 0순위 | 메모리 하드 해시로 GPU 무차별 대입에 대응해야 한다. 지금 상태로는 DB 유출 시 비밀번호가 그대로 노출된다 |
+| 비밀번호 | bcrypt (`$2b$`, cost 12) 해시만 저장. 검증된 구현(Openwall crypt_blowfish)을 vendoring 했고 직접 짠 암호 코드는 없다. 해싱 도입 전 평문 행은 로그인 성공 시점에 해시로 승격 | salt 가 해시 문자열 안에 들어 있어 같은 비밀번호도 매번 다른 해시. cost 로 일부러 느리게(≈250 ms) 만들어 유출 시 무차별 대입 비용을 올린다 |
 | 자격 증명 | 외부 API 키는 환경 변수로만 읽는다. 저장소에 두지 않는다 | 공개 저장소 |
 | 장애 격리 | DB 커넥션은 RAII 반납, 트랜잭션은 실패 시 전체 Rollback | 부분 반영으로 정합성이 깨지는 것을 막는다 |
 
@@ -257,9 +262,66 @@ Key Lookup 이 남는 이유는 SELECT 가 모든 컬럼을 읽기 때문이다.
 | JobQueue | `std::mutex` | 위와 동일 |
 | RoomManager | `std::shared_mutex` | read-heavy (FindRoom / GetRoomList / 확성기 iterate) |
 | SessionManager | `std::shared_mutex` | read-heavy (IsOnline / GetSession), Register/Unregister 만 write |
-| Session 소켓 I/O | asio strand | async 연산과 자연스럽게 결합 |
+| Session 소켓 I/O | per-session asio strand | DoRead / DoWrite / Send 의 post 가 전부 한 strand 위에서만 돈다. 아래 "부하 테스트가 잡은 버그" 참고 |
 | TLS | `LThreadId`, `LSendBufferChunk` | 스레드별 독립 자원, 경합 제거 |
 | ORM 동시성 | 요청당 `DBContext` 격리 + Pool 의 conn 한 스레드 전유 | 자료구조에 mutex 얹는 대신 공유 자체를 구조적으로 제거 |
+
+### 부하 테스트가 잡은 버그 — 문서에만 있던 strand
+
+이 표의 "Session 소켓 I/O: asio strand" 는 부하 테스트 전까지 **문서에만 있고 코드에는 없었다.** 소켓 executor 가 io_context 그 자체였고, `Send()` 가 그 executor 로 post 한 핸들러와 `DoWrite` 코루틴이 워커 24개 중 아무 스레드에서나 돌면서 `WriteQueue` 를 동시에 만졌다.
+
+- **증상**: 50명 방에서 브로드캐스트 부하를 주자 `Write error: 잘못된 포인터 주소` (WSAEFAULT) 와 메시지 유실 5건. 같은 테스트를 다시 돌리자 서버 크래시.
+- **진단**: 유실 패턴을 (수신자, 송신자, 순번) 으로 찍어 보니 특정 세션에 몰림 → 세션 단위 자료구조 경합. 코드를 보니 strand 가 없었다.
+- **수정**: `Session` 에 `asio::strand` 를 두고 `DoRead` / `DoWrite` / `Send` 의 post / `Disconnect` 를 전부 그 위에서 실행. 쓰기 오류가 나면 조용히 큐를 버리지 않고 `Disconnect` 해서 정리 경로로 보낸다.
+- **검증**: 같은 부하 50명 3회 + 100명 1회, 유실 0 · 쓰기 오류 0 · 서버 생존.
+
+소규모 수동 테스트로는 몇 달 동안 드러나지 않던 경합이 자동 부하 테스트 첫 실행에서 나왔다. "동시성 버그는 테스트가 아니라 부하가 찾는다" 는 걸 몸으로 배운 사례.
+
+---
+
+## AI 채팅 — 외부 API 를 비동기로 붙이기
+
+채팅방에서 `Tab` 으로 AI 모드를 고르면 입력이 Claude API 로 가고, 응답이 생성되는 대로 조각 단위로 돌아온다.
+
+```
+클라 [AI] ─C_AI_CHAT─▶ 핸들러 ─co_spawn(세션 strand)─▶ AiChatService
+                                                       ├─ 한도 검사            AiUsage (유저·일 단위)
+                                                       ├─ 유저 메시지 저장      AiMessage
+                                                       ├─ 최근 20행 이력 로드   ORDER BY CreatedAt DESC, TOP 20
+                                                       ├─ Claude::StreamMessage ─ HTTPS POST /v1/messages (stream: true)
+                                                       │     └─ SSE text_delta 마다 ─S_AI_CHAT{text}─▶ 클라 (줄 단위로 화면에)
+                                                       └─ 응답 저장 + 사용량 갱신 ─S_AI_CHAT{done}─▶ 클라
+```
+
+### 설계 결정
+
+- **워커를 멈추지 않는다.** HTTP 클라이언트가 서버와 같은 io_context 위의 코루틴이라 API 응답을 기다리는 동안 스레드를 점유하지 않는다. 핸들러는 코루틴을 띄우고 바로 돌아간다.
+- **Boost.Beast 대신 독립형 asio + OpenSSL.** 이 프로젝트는 독립형 asio 를 쓰고 Beast 는 Boost.Asio 에만 붙는다. Beast 를 쓰려면 전체를 Boost 로 옮겨야 해서, 필요한 만큼(HTTP/1.1 POST, chunked 본문, TLS)만 `Server/AI/HttpClient` 로 직접 구현했다. 범위 밖: 리다이렉트, keep-alive, HTTP/2, 압축. 엔드포인트가 고정이라 필요 없다.
+- **TLS 검증을 끄지 않았다.** OpenSSL 의 기본 신뢰 경로는 Windows 에서 비어 있다. Windows 루트 인증서 저장소를 OpenSSL 신뢰 저장소로 옮겨 넣고 `verify_peer` + 호스트명 검증 + SNI 를 켰다.
+- **SSE 파서는 분리.** HTTP 조각은 이벤트 경계와 무관하게 잘려 오므로 줄 단위 상태 기계(`SseParser`)가 `event:` / `data:` 를 모아 이벤트를 조립한다.
+- **이력은 DB.** API 는 이전 대화를 기억하지 않는다. `AiMessage` 에 저장하고 요청마다 최근 20행을 실어 보낸다. 이를 위해 ORM 에 `OrderBy` / `Take` (ORDER BY / TOP) 를 추가했다. 실패한 호출 뒤 연속된 user 메시지는 합쳐서 역할이 번갈아가게 만든다.
+- **한도 = 원장의 축소판.** `AiUsage(UserId, Day)` 에 호출 수·입력/출력 토큰을 누적. 일일 호출·토큰 상한 초과 시 거절.
+- **실패 분류.** 429 는 Retry-After 만큼(최대 5초) 기다려 재시도, 5xx·네트워크 오류는 1초 뒤 재시도(최대 3회), 400/401/404 는 즉시 실패. 이미 텍스트가 클라로 나간 뒤에는 재시도하지 않는다(중복 출력 방지). 안전 분류기 거부(`stop_reason: refusal`) 는 정중한 한 줄로 바꾼다.
+- **한 세션에 하나.** 응답이 흐르는 중에 다시 보내면 거절한다. 두 스트림이 섞이면 화면이 깨진다.
+- **API 키는 환경 변수만.** `ANTHROPIC_API_KEY` 가 없으면 AI 기능만 꺼지고 서버는 뜬다. 저장소에 키가 들어갈 경로가 없다.
+- **비용·지연.** 채팅 용도라 `output_config.effort: low`, `max_tokens 1024`. 시스템 프롬프트는 고정 문자열(프롬프트 캐시 프리픽스 유지).
+
+### 검증
+
+- **모의 서버** `Tools/LoadTest/mock_claude_server.py`: 실제 API 와 같은 SSE 이벤트를 chunked 로 흘린다. 429/500 한 번 실패, refusal, 스트림 도중 error, 느린 응답 시나리오.
+- **통합 테스트** `Tools/LoadTest/ai_chat_test.py` 11개 항목 전부 통과: 조각 스트리밍, 이력 3건 전송, 429·500 재시도 후 성공, refusal, 스트림 오류, 진행 중 중복 요청 거절, 일일 한도, DB 저장, 사용량 집계.
+- **실제 엔드포인트 TLS**: 더미 키로 `api.anthropic.com` 에 붙여 `HTTP 401: API key is invalid.` 를 받았다. TLS 핸드셰이크·인증서 검증·SNI·응답 파싱이 실제 서버에서 동작한다는 뜻이다. 실제 응답 스트리밍은 유효한 키를 넣어야 확인된다.
+
+### 환경 변수
+
+| 변수 | 기본 | 설명 |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | (없음) | 없으면 AI 기능 비활성 |
+| `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | 모의 서버 테스트 시 `http://127.0.0.1:8765` |
+| `CHATSERVER_AI_MODEL` | `claude-opus-5` | |
+| `CHATSERVER_AI_EFFORT` | `low` | 채팅 용도라 지연·비용 우선 |
+| `CHATSERVER_AI_FALLBACKS` | `1` | 거부 시 서버측 대체 모델 (베타 헤더). `0` 이면 끔 |
+| `CHATSERVER_AI_DAILY_CALLS` / `CHATSERVER_AI_DAILY_TOKENS` | 50 / 100000 | 유저·일 단위 한도 |
 
 ---
 
@@ -279,7 +341,7 @@ C++ 에는 런타임 리플렉션이 없어서 SQLAlchemy 식 표현식 (`Col<Us
 | 2 | Codegen / Schema | `Attributes.h`, `Tools/EntityGenerator/` | `DB_ENTITY` / `LEN(n)` / `INDEX` / `UNIQUE` / `COMPOSITE_*` 마커 → `EntitiesGenerated.h` (`describe_entity` 특수화) + `CREATE TABLE` / `ALTER TABLE ADD` / `CREATE INDEX` SQL 단일 소스 생성 |
 | 3 | Type System | `Types.h` | `TypeTag` enum + `DbValue = std::variant<...>` 로 SQL ↔ C++ 타입 추상화 |
 | 4 | Metadata Registry | `Meta.h` | `EntityMeta` / `FieldMeta` / `RelationMeta` + 람다 read/write/dirty 훅. 리플렉션 부재를 메타 빌더로 흉내 |
-| 5 | Query / SQL Builder | `Sql.h`, `Column.h`, `Condition.h` | `Col<T>::Field == 5` 표현식 → `Condition`. `select/insert/update/delete_sql()` 자동 생성 + Prepared `?` 자리표시자 + 테이블 힌트 (`WithHint`) |
+| 5 | Query / SQL Builder | `Sql.h`, `Column.h`, `Condition.h` | `Col<T>::Field == 5` 표현식 → `Condition`. `select/insert/update/delete_sql()` 자동 생성 + Prepared `?` 자리표시자 + 테이블 힌트 (`WithHint`) + 정렬·상위 N (`OrderBy` / `Take`) |
 | 6 | Dirty Checking | `Property.h`, `PrimaryProperty.h` | 필드 래퍼가 `currentValue` / `originValue` / `bDirty` 보관. UPDATE SET 절에 dirty 컬럼만 포함, PK 는 mutate 차단 |
 | 7 | Relationship | `Navigation.h`, `IncludeEntry.h` | `Include(&E::Nav)` → JOIN 자동 + 타겟 hydrate + `BindObj` 람다로 객체 포인터 캐싱 |
 | 8 | Unit of Work / Identity Map | `DBContext.h` (`DbSet`, `Changes`, `IdentityMap`, `SaveChanges`) | 변경 추적 (ADDED/MODIFIED/DELETED) + 트랜잭션 단위 flush + PK 기반 객체 캐싱으로 중복 hydrate 방지 |
@@ -342,7 +404,7 @@ Handler
 - 패킷 디스패치 + protobuf 기반 핸들러 자동 생성
 
 ### 도메인
-- 회원가입 / 로그인 (화이트리스트 입력 검증. 비밀번호 해싱은 [로드맵](#로드맵))
+- 회원가입 / 로그인 (화이트리스트 입력 검증 + bcrypt 해싱, 평문 레거시 행 점진 승격)
 - 자체 ORM 으로 User / Friendship 엔티티 관리
 - 방 생성 + 리스트 + 입장/퇴장 (휘발 방, 마지막 유저 퇴장 시 자동 소멸)
 - 마이페이지 (닉네임 수정 UPDATE, 계정 탈퇴 DELETE)
@@ -350,13 +412,12 @@ Handler
 - 확성기: 한 방 → 모든 방 브로드캐스트 (`RoomManager` iterate + 각 Room JobQueue 에 push)
 - SessionManager + 친구 온라인 상태 표시
 - 귓속말: `Tab` 토글 + `/닉네임 메시지` 형식 + 로컬 에코
+- **AI 채팅**: `Tab` 으로 AI 모드, Claude API 스트리밍 응답, 이력 DB 저장, 유저·일 한도 (위 [AI 채팅](#ai-채팅--외부-api-를-비동기로-붙이기))
 - **포인트 이체**: 마이페이지에서 잔고 조회 + 닉네임 지정 이체. 한 트랜잭션 2행 갱신 + OCC 재시도 + 수신자 push 알림 (위 [포인트 이체](#포인트-이체--한-트랜잭션에-두-행))
 
 ---
 
 ## 성능 측정
-
-> 진행 중. 이체 동시성은 측정 완료, 채팅 부하는 예정.
 
 측정 도구는 `Tools/LoadTest/` 의 Python 스크립트다. protobuf 런타임 없이 proto3 wire format 을 직접 인코딩해 서버의 바이너리 프로토콜을 말한다 (`chat_protocol.py`). 패킷 ID 는 생성된 헤더에서 파싱하므로 proto 가 바뀌어도 그대로 쓴다.
 
@@ -369,17 +430,25 @@ Handler
 | OCC vs UPDLOCK | 같은 시나리오, 환경 변수로 락 방식만 교체 | UPDLOCK: **90 / 0**, 재시도 0, 0.60 s. 상세는 [OCC vs UPDLOCK](#occ-vs-updlock--같은-부하-락-방식만-교체) |
 | 인덱스 효과 | 유저 10,020행, Nickname / Email 단건 조회 | 논리 읽기 **147 → 4**, Clustered Index Scan → Index Seek |
 | 이체 처리량 | 위 시나리오 | 0.6 s, 약 140~150 transfers/s (클라 9 스레드 직렬 요청 기준이라 서버 상한이 아님) |
-| 동시 접속 | N 클라이언트 접속 · 로그인 · 방 입장 | — (예정) |
-| 브로드캐스트 TPS | 방 안에서 초당 M 건 채팅 | — (예정) |
-| 응답 지연 p50 / p99 | 송신 → 다른 클라 수신까지 | — (예정) |
+| 채팅 브로드캐스트 (50명) | 방 1개, 50명이 각 초당 10건 × 20건 = 1,000건 송신 → 50,000건 전달 (3회 반복) | 유실 **0**, 약 22,500 deliveries/s, 지연 p50 19~22 ms · p99 32~35 ms |
+| 채팅 브로드캐스트 (100명) | 100명, 2,000건 송신 → 200,000건 전달 | 유실 **0**, 약 87,000 deliveries/s, 지연 p50 21 ms · p95 53 ms · p99 67 ms |
+| bcrypt | cost 12, 가입(해시 1회) / 로그인(검증 1회) 왕복 | 각 ≈ 250 ms. 100명 병렬 가입은 16 스레드로 7.0 s |
 
 허브 계좌 하나에 9개 요청이 몰리는 극단적 경합에서 OCC 실패율 10~15% 는 낙관적 방식의 한계를 그대로 보여준다. 재시도가 아니라 대기가 필요한 자리이고, 같은 코드에 `UPDLOCK` 을 켜면 실패가 0 이 된다.
+
+브로드캐스트 지연은 **같은 호스트의 Python 클라이언트 100개가 수신·파싱하는 시간까지 포함** 한 값이다. 서버 단독 지연은 이보다 작다. 송신 속도는 클라이언트가 초당 10건으로 제한한 것이라 서버 상한이 아니다. 유실 0 과 서버 생존이 이 테스트의 핵심 결과다.
 
 재현:
 
 ```
 x64\Debug\Server.exe
 python Tools\LoadTest	ransfer_test.py --users 10 --rounds 5 --amount 100
+python Tools\LoadTest\chat_load_test.py --users 100 --msgs 20 --rate 10
+python Tools\LoadTestcrypt_test.py
+
+# AI (키 없이): 모의 서버 띄우고, 서버를 ANTHROPIC_BASE_URL=http://127.0.0.1:8765 ANTHROPIC_API_KEY=test-key CHATSERVER_AI_DAILY_CALLS=6 로 실행
+python Tools\LoadTest\mock_claude_server.py
+python Tools\LoadTesti_chat_test.py
 ```
 
 ---
@@ -388,11 +457,11 @@ python Tools\LoadTest	ransfer_test.py --users 10 --rounds 5 --amount 100
 
 순서대로 진행 중이다.
 
-0. **비밀번호 해싱 (argon2id)** — 현재 평문 저장. 가장 먼저 고친다.
+0. ~~**비밀번호 해싱**~~ — 완료 (bcrypt).
 1. ~~**포인트 이체**~~ — 완료.
 2. ~~**인덱스 + 락 힌트**~~ — 완료. 실행 계획·IO 비교와 OCC vs UPDLOCK 비교까지.
-3. **AI 채팅** — Claude API 를 Boost.Beast 로 같은 `io_context` 위에서 비동기 호출. SSE 스트리밍 조각을 자체 패킷으로 즉시 전달. 대화 이력은 ORM 엔티티로 저장, 유저별 호출·토큰 한도 관리, API 장애가 서버 본체로 번지지 않게 격리. API 키는 환경 변수 `ANTHROPIC_API_KEY` 로만 읽는다.
-4. **부하 테스트** — 위 표를 채운다.
+3. ~~**AI 채팅**~~ — 완료 (독립형 asio + OpenSSL 로 구현, 모의 서버·실제 엔드포인트 TLS 검증). 실제 응답 스트리밍 확인은 API 키 필요.
+4. ~~**부하 테스트**~~ — 완료. 이체 동시성·채팅 브로드캐스트·bcrypt 비용 측정, strand 버그 발견·수정.
 
 ---
 
@@ -404,6 +473,11 @@ python Tools\LoadTest	ransfer_test.py --users 10 --rounds 5 --amount 100
 - **OCC 의 전체 컬럼 비교**: 컬럼이 많아지면 버전 컬럼 방식이 유리. 트레이드오프를 알고 선택했다.
 - **스키마 마이그레이션은 추가 전용**: 컬럼 추가와 인덱스 생성만 자동. 컬럼 길이·타입 변경, 같은 이름의 인덱스 정의 변경은 감지하지 못한다 (수동 ALTER / DROP).
 - **테이블 힌트는 메인 테이블(t0) 에만**: `Include` 로 JOIN 되는 테이블에는 붙지 않는다. NOLOCK 목록 조회에서 JOIN 쪽은 일반 읽기.
+- **AI 콘솔 출력은 줄 단위 스트리밍**: 조각을 받는 즉시 화면에 찍지 않고 줄바꿈이나 폭 초과 시점에 내보낸다. 글자 단위로 보이려면 스크롤 영역 안 커서 위치 추적이 필요해 보류.
+- **AI HTTP 클라이언트는 최소 구현**: 리다이렉트·keep-alive·HTTP/2 없음. Boost.Beast 로 바꾸려면 프로젝트를 Boost.Asio 로 전환해야 한다.
+- **실제 API 응답은 미검증**: 키 없이 모의 서버와 실제 엔드포인트 401 까지만 확인.
+- **bcrypt 72바이트 제한**: 입력 72바이트 이후는 무시된다. 비밀번호를 64자로 제한하지만 UTF-8 다바이트면 넘을 수 있다. SHA-256 pre-hash 로 풀 수 있지만 범위 밖.
+- **부하 테스트의 지연 수치는 클라이언트 포함**: Python 클라이언트가 같은 머신에서 도는 값. 서버 단독 지연 측정은 별도 계측 필요.
 - **Key Lookup 잔존**: SELECT 가 전 컬럼을 읽어 Index Seek 뒤에 Key Lookup 이 붙는다. projection 이나 covering index 로 없앨 수 있지만 이 규모에서는 보류.
 - **ORM `BindParam`/`BindCol` switch 산재**: `DbValue`/`TypeTag` 분기가 `ToList` / `SaveChanges` / OCC 경로에 4회 중복. `DbValueBinder` 로 일원화 가능.
 - **Room JobQueue 단일화**: state 와 broadcast 가 동일 큐 → 한 워커만 처리. state queue / chat queue 분리 시 Sessions 동시 접근 대책 (RWLock or copy-on-write 스냅샷) 필요.
@@ -417,18 +491,20 @@ python Tools\LoadTest	ransfer_test.py --users 10 --rounds 5 --amount 100
 
 ```
 ChatServer/
-├── ServerCore/         # 인프라 (Lock, JobQueue, Session, SendBuffer, ThreadManager)
+├── ServerCore/         # 인프라 (Lock, JobQueue, Session+strand, SendBuffer, ThreadManager)
+│   └── ThirdParty/bcrypt/  # Openwall crypt_blowfish (vendoring, 공개 도메인)
 ├── Server/
 │   ├── Network/        # Listener, ClientPacketHandler, Room, RoomManager, SessionManager
 │   ├── DB/
 │   │   ├── ORM/        # 9-layer ORM (DBConnection, Property, Meta, DBContext, Sql, Navigation 등)
 │   │   ├── Entities/   # 도메인 엔티티 (User, Friendship 등) + DB_ENTITY 마커
 │   │   └── Generated/  # codegen 산출물 (EntitiesGenerated.h)
-│   └── Security/       # InputValidator (화이트리스트 검증)
+│   ├── Security/       # InputValidator (화이트리스트 검증), PasswordHasher (bcrypt)
+│   └── AI/             # HttpClient (asio+ssl 스트리밍 HTTP), SseParser, ClaudeClient, AiChatService
 ├── Client/             # 콘솔 클라 (ClientApp / ClientSession / ConsoleUI / ServerPacketHandler)
 ├── Proto/              # *.proto 단일 소스
 └── Tools/
     ├── PacketGenerator/    # *.proto → C++ 패킷 핸들러 자동 생성
     ├── EntityGenerator/    # Entities/*.h → EntitiesGenerated.h + CREATE TABLE SQL
-    └── LoadTest/           # 프로토콜 직접 구현 Python 클라이언트 + 이체 동시성 테스트
+    └── LoadTest/           # 프로토콜 직접 구현 Python 클라이언트 + 이체 동시성 · 채팅 부하 · bcrypt · AI(모의 서버) 테스트
 ```

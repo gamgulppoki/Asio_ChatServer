@@ -27,3 +27,7 @@ __pycache__/
 # Markdown (README only)
 *.md
 !README.md
+
+# Docs: 마크다운은 README 만, 실행 계획 캡처 이미지는 허용
+!docs/images/
+!docs/images/*.png
