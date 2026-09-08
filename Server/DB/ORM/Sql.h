@@ -19,6 +19,27 @@ inline std::string to_sql_type(TypeTag tag)
     }
 }
 
+// 필드 단위 타입. 문자열은 LEN(n) 표식으로 지정한 길이를 쓴다 (없으면 4000).
+inline std::string to_sql_type(const FieldMeta& f)
+{
+    if (f.DataType == TypeTag::STRING)
+        return "NVARCHAR(" + std::to_string(f.MaxLen > 0 ? f.MaxLen : 4000) + ")";
+    return to_sql_type(f.DataType);
+}
+
+// 테이블 힌트 상수. DbSet::WithHint() 에 넘겨 FROM [T] t0 WITH (...) 로 나간다.
+// 이 프로젝트가 다루는 힌트는 두 가지뿐이다:
+//   NoLock  — 락을 걸지도 기다리지도 않는다. 커밋 안 된 행을 읽을 수 있다(dirty read).
+//             방 리스트·친구 목록처럼 잠깐 틀려도 되는 조회에만. 잔고·정산에는 금지.
+//   UpdLock — 읽는 시점에 갱신 락을 잡아 트랜잭션 끝까지 남이 못 고치게 한다(비관적).
+//             잔고처럼 충돌이 잦고 실패 비용이 큰 갱신용. 반드시 BeginTransaction() 뒤에 써야
+//             락이 Commit 까지 유지된다 (autocommit 이면 문장 끝에서 풀린다).
+namespace Hint
+{
+    inline constexpr const char* NoLock  = "NOLOCK";
+    inline constexpr const char* UpdLock = "UPDLOCK, ROWLOCK";
+}
+
 inline std::string create_table_sql(const EntityMeta& meta)
 {
     std::string sql;
@@ -28,7 +49,7 @@ inline std::string create_table_sql(const EntityMeta& meta)
     for (size_t i = 0; i < meta.Fields.size(); ++i)
     {
         const auto& f = meta.Fields[i];
-        sql += "    [" + f.DataName + "] " + to_sql_type(f.DataType);
+        sql += "    [" + f.DataName + "] " + to_sql_type(f);
 
         if (f.DataName == meta.PrimaryKeyName)
         {
@@ -44,6 +65,64 @@ inline std::string create_table_sql(const EntityMeta& meta)
 
     sql += ");";
     return sql;
+}
+
+// 컬럼별 기본값. 기존 행이 있는 테이블에 NOT NULL 컬럼을 추가할 때 필요하다.
+inline std::string default_literal(TypeTag tag)
+{
+    switch (tag)
+    {
+        case TypeTag::INT:    return "0";
+        case TypeTag::DOUBLE: return "0";
+        case TypeTag::BOOL:   return "0";
+        case TypeTag::STRING: return "N''";
+        default:              return "NULL";
+    }
+}
+
+// 스키마 마이그레이션 (추가 전용).
+// 엔티티에 필드가 추가됐는데 테이블에는 컬럼이 없으면 ALTER TABLE ADD 로 채운다.
+// 데이터를 보존해야 하는 원장 테이블에서 "테이블 드롭 후 재생성" 은 선택지가 아니기 때문.
+// 컬럼 삭제/타입 변경은 다루지 않는다 (데이터 손실 위험이 있어 자동화 대상에서 제외).
+inline std::vector<std::string> add_missing_columns_sql(const EntityMeta& meta)
+{
+    std::vector<std::string> statements;
+    for (const auto& f : meta.Fields)
+    {
+        if (f.DataName == meta.PrimaryKeyName)
+            continue;
+
+        std::string sql;
+        sql += "IF COL_LENGTH(N'[dbo].[" + meta.TableName + "]', N'" + f.DataName + "') IS NULL\n";
+        sql += "    ALTER TABLE [" + meta.TableName + "] ADD [" + f.DataName + "] "
+             + to_sql_type(f) + " NOT NULL DEFAULT " + default_literal(f.DataType) + ";";
+        statements.push_back(std::move(sql));
+    }
+    return statements;
+}
+
+// 인덱스 생성 (없을 때만). 엔티티의 INDEX / UNIQUE / COMPOSITE_* 표식이 여기로 온다.
+// 인덱스 정의 변경(컬럼 추가 등)은 이름이 같으면 감지하지 못한다 — 이름을 바꾸거나 수동으로 DROP 한다.
+inline std::vector<std::string> create_indexes_sql(const EntityMeta& meta)
+{
+    std::vector<std::string> statements;
+    for (const auto& ix : meta.Indexes)
+    {
+        std::string cols;
+        for (size_t i = 0; i < ix.Columns.size(); ++i)
+        {
+            if (i > 0) cols += ", ";
+            cols += "[" + ix.Columns[i] + "]";
+        }
+
+        std::string sql;
+        sql += "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'" + ix.Name
+             + "' AND object_id = OBJECT_ID(N'[dbo].[" + meta.TableName + "]'))\n";
+        sql += "    CREATE " + std::string(ix.Unique ? "UNIQUE " : "") + "NONCLUSTERED INDEX [" + ix.Name
+             + "] ON [" + meta.TableName + "] (" + cols + ");";
+        statements.push_back(std::move(sql));
+    }
+    return statements;
 }
 
 inline std::string insert_sql(const EntityMeta& meta)
@@ -112,9 +191,11 @@ inline std::string update_sql(const EntityMeta& meta, const std::vector<size_t>&
 
 // includes 비어있으면 단일 테이블 SELECT, 있으면 JOIN 자동 포함.
 // alias 규칙: 메인은 t0, Include 는 순번대로 t1, t2, ... (같은 타겟 테이블 중복 조인 시 구분용)
+// tableHint: 메인 테이블(t0) 에 붙는 WITH (...) 힌트. 비어 있으면 힌트 없음. Hint::NoLock / Hint::UpdLock 참고.
 inline std::string select_sql(const EntityMeta& meta,
                               const std::vector<Condition>& conditions,
-                              const std::vector<IncludeEntry>& includes = {})
+                              const std::vector<IncludeEntry>& includes = {},
+                              const std::string& tableHint = "")
 {
     std::string sql = "SELECT ";
 
@@ -135,8 +216,10 @@ inline std::string select_sql(const EntityMeta& meta,
             sql += ", " + alias + ".[" + f.DataName + "]";
     }
 
-    // [3] FROM 절
+    // [3] FROM 절 (+ 테이블 힌트)
     sql += " FROM [" + meta.TableName + "] t0";
+    if (!tableHint.empty())
+        sql += " WITH (" + tableHint + ")";
 
     // [4] JOIN 절 — Include 마다 한 줄씩. ON 은 FK = 타겟 PK
     for (size_t idx = 0; idx < includes.size(); ++idx)

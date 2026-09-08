@@ -46,6 +46,11 @@ enum : uint16
 	PKT_S_GET_FRIEND_LIST = 1031,
 	PKT_C_REMOVE_FRIEND = 1032,
 	PKT_S_REMOVE_FRIEND = 1033,
+	PKT_C_GET_BALANCE = 1034,
+	PKT_S_GET_BALANCE = 1035,
+	PKT_C_TRANSFER = 1036,
+	PKT_S_TRANSFER = 1037,
+	PKT_S_TRANSFER_RECEIVED = 1038,
 };
 
 // Forward declarations
@@ -67,6 +72,9 @@ bool Handle_S_REJECT_FRIEND(SharedPtr<Session> SessionPtr, Protocol::S_REJECT_FR
 bool Handle_S_GET_PENDING_FRIENDS(SharedPtr<Session> SessionPtr, Protocol::S_GET_PENDING_FRIENDS& Pkt);
 bool Handle_S_GET_FRIEND_LIST(SharedPtr<Session> SessionPtr, Protocol::S_GET_FRIEND_LIST& Pkt);
 bool Handle_S_REMOVE_FRIEND(SharedPtr<Session> SessionPtr, Protocol::S_REMOVE_FRIEND& Pkt);
+bool Handle_S_GET_BALANCE(SharedPtr<Session> SessionPtr, Protocol::S_GET_BALANCE& Pkt);
+bool Handle_S_TRANSFER(SharedPtr<Session> SessionPtr, Protocol::S_TRANSFER& Pkt);
+bool Handle_S_TRANSFER_RECEIVED(SharedPtr<Session> SessionPtr, Protocol::S_TRANSFER_RECEIVED& Pkt);
 
 class ServerPacketHandler
 {
@@ -144,6 +152,18 @@ public:
 		{
 			return HandlePacket<Protocol::S_REMOVE_FRIEND>(Handle_S_REMOVE_FRIEND, SessionPtr, Buffer, iLen);
 		};
+		GPacketHandler[PKT_S_GET_BALANCE] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::S_GET_BALANCE>(Handle_S_GET_BALANCE, SessionPtr, Buffer, iLen);
+		};
+		GPacketHandler[PKT_S_TRANSFER] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::S_TRANSFER>(Handle_S_TRANSFER, SessionPtr, Buffer, iLen);
+		};
+		GPacketHandler[PKT_S_TRANSFER_RECEIVED] = [](SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
+		{
+			return HandlePacket<Protocol::S_TRANSFER_RECEIVED>(Handle_S_TRANSFER_RECEIVED, SessionPtr, Buffer, iLen);
+		};
 	}
 
 	static bool HandlePacket(SharedPtr<Session> SessionPtr, BYTE* Buffer, int32 iLen)
@@ -169,6 +189,8 @@ public:
 	static SendBufferRef MakeSendBuffer(Protocol::C_GET_PENDING_FRIENDS& Pkt) { return _MakeSendBuffer(Pkt, PKT_C_GET_PENDING_FRIENDS); }
 	static SendBufferRef MakeSendBuffer(Protocol::C_GET_FRIEND_LIST& Pkt) { return _MakeSendBuffer(Pkt, PKT_C_GET_FRIEND_LIST); }
 	static SendBufferRef MakeSendBuffer(Protocol::C_REMOVE_FRIEND& Pkt) { return _MakeSendBuffer(Pkt, PKT_C_REMOVE_FRIEND); }
+	static SendBufferRef MakeSendBuffer(Protocol::C_GET_BALANCE& Pkt) { return _MakeSendBuffer(Pkt, PKT_C_GET_BALANCE); }
+	static SendBufferRef MakeSendBuffer(Protocol::C_TRANSFER& Pkt) { return _MakeSendBuffer(Pkt, PKT_C_TRANSFER); }
 
 private:
 	template<typename PacketType, typename ProcessFunc>

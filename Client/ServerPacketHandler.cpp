@@ -50,6 +50,15 @@ Atomic<bool>       GRemoveFriendDone{false};
 Atomic<bool>       GRemoveFriendSuccess{false};
 String             GFriendActionMessage;
 
+Atomic<bool>       GBalanceDone{false};
+Atomic<bool>       GBalanceSuccess{false};
+Atomic<int64>      GMyBalance{0};
+
+Atomic<bool>       GTransferDone{false};
+Atomic<bool>       GTransferSuccess{false};
+String             GTransferMessage;
+Atomic<int32>      GTransferRetries{0};
+
 // 회원가입 결과 수신. 결과 메시지는 AuthLoop 가 화면에 출력하므로 여기서는 플래그만 세팅.
 bool Handle_S_REGISTER(SharedPtr<Session> SessionPtr, Protocol::S_REGISTER& Pkt)
 {
@@ -235,5 +244,41 @@ bool Handle_S_REMOVE_FRIEND(SharedPtr<Session> SessionPtr, Protocol::S_REMOVE_FR
 	GRemoveFriendSuccess = Pkt.success();
 	GFriendActionMessage = Pkt.msg();
 	GRemoveFriendDone = true;
+	return true;
+}
+
+// ==========================
+// 포인트 (잔고 조회 / 이체)
+// ==========================
+
+// 잔고 조회 결과. MyPageLoop 가 헤더에 표시.
+bool Handle_S_GET_BALANCE(SharedPtr<Session> SessionPtr, Protocol::S_GET_BALANCE& Pkt)
+{
+	GBalanceSuccess = Pkt.success();
+	if (Pkt.success())
+		GMyBalance = Pkt.balance();
+	GBalanceDone = true;
+	return true;
+}
+
+// 이체 결과. 성공 시 서버가 돌려준 잔고로 동기화.
+bool Handle_S_TRANSFER(SharedPtr<Session> SessionPtr, Protocol::S_TRANSFER& Pkt)
+{
+	GTransferSuccess = Pkt.success();
+	GTransferMessage = Pkt.msg();
+	GTransferRetries = Pkt.retries();
+	if (Pkt.success())
+		GMyBalance = Pkt.my_balance();
+	GTransferDone = true;
+	return true;
+}
+
+// 다른 유저가 나에게 이체했을 때 서버가 push 하는 알림. 어느 화면에 있든 한 줄 출력.
+bool Handle_S_TRANSFER_RECEIVED(SharedPtr<Session> SessionPtr, Protocol::S_TRANSFER_RECEIVED& Pkt)
+{
+	GMyBalance = Pkt.my_balance();
+	PrintChatMessage("\033[32m[포인트] " + Pkt.from_name() + " 님이 "
+		+ std::to_string(Pkt.amount()) + " P 를 보냈습니다. (잔고 "
+		+ std::to_string(Pkt.my_balance()) + " P)\033[0m", false);
 	return true;
 }

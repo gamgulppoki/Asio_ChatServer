@@ -81,8 +81,17 @@ class DBContext
         DbSet<T> Where(Condition condition) const
         {
             DbSet<T> copy = *this;
-            
+
             copy.Conditions.push_back(std::move(condition));
+            return copy;
+        }
+
+        // 테이블 힌트. 메인 테이블(t0) 에 WITH (...) 로 붙는다. Hint::NoLock / Hint::UpdLock.
+        // UpdLock 은 DBContext::BeginTransaction() 이후에 써야 Commit 까지 락이 유지된다.
+        DbSet<T> WithHint(const char* hint) const
+        {
+            DbSet<T> copy = *this;
+            copy.TableHint = hint ? hint : "";
             return copy;
         }
 
@@ -95,8 +104,8 @@ class DBContext
 
             const auto& meta = MetaRegistry::Instance().Entities.at(typeid(T));
 
-            // 1. SELECT SQL 생성 (Includes 있으면 JOIN 자동 포함)
-            std::string sql = select_sql(meta, Conditions, Includes);
+            // 1. SELECT SQL 생성 (Includes 있으면 JOIN 자동 포함, TableHint 있으면 WITH 절)
+            std::string sql = select_sql(meta, Conditions, Includes, TableHint);
 
             // 2. WHERE 파라미터 바인딩 (값/lenInd는 Execute까지 살아있어야 함)
             std::vector<DbValue> paramVals;
@@ -318,11 +327,20 @@ class DBContext
         DBContext* context = nullptr;
         std::vector<Condition> Conditions;
         std::vector<IncludeEntry> Includes;
+        std::string TableHint;
     };
     
 public:
     ~DBContext()
     {
+        // BeginTransaction() 후 SaveChanges 없이 빠져나온 경로(검증 실패 early return 등) 안전망.
+        // UPDLOCK 으로 잡은 락을 여기서 반드시 풀어야 다음 요청이 대기하지 않는다.
+        if (bInTransaction && dbConnection)
+        {
+            dbConnection->Rollback();
+            bInTransaction = false;
+        }
+
         auto& reg = MetaRegistry::Instance();
 
         // Changes 의 ADDED 는 소유권이 DBContext 로 넘어왔지만 아직 Map 에 없음.
@@ -373,9 +391,15 @@ public:
         }
 
         // 모든 Changes 를 flush → 전부 성공하면 Commit + ApplyChange, 하나라도 실패하면 Rollback
-        dbConnection->Begin();
+        // BeginTransaction() 으로 이미 열려 있으면(UPDLOCK 조회 뒤) 그 트랜잭션을 이어서 쓴다.
+        if (!bInTransaction)
+        {
+            dbConnection->Begin();
+            bInTransaction = true;
+        }
 
         bool allOk = true;
+        LastOCCConflictCount = 0;
 
         for (auto it = Changes.begin(); it != Changes.end(); )
         {
@@ -477,6 +501,7 @@ public:
                 dbConnection->Unbind();
                 OCCChanges.push_back(std::move(*it));
                 it = Changes.erase(it);
+                ++LastOCCConflictCount;
                 allOk = false;
                 break;
             }
@@ -508,11 +533,13 @@ public:
         if (allOk)
         {
             dbConnection->Commit();
+            bInTransaction = false;
             ApplyChange();
         }
         else
         {
             dbConnection->Rollback();
+            bInTransaction = false;
             for (auto& occ : OCCChanges)
             {
                 auto& meta = MetaRegistry::Instance().Entities.at(occ.type);
@@ -629,6 +656,22 @@ public:
         dbConnection = conn;
     }
 
+    // 직전 SaveChanges 가 OCC 충돌로 실패했는지. 호출자가 "재시도할 실패" 와
+    // "재시도해도 소용없는 실패(DB 오류)" 를 구분해 정책을 정할 수 있게 한다.
+    bool HadOCCConflict() const { return LastOCCConflictCount > 0; }
+    int32 GetLastOCCConflictCount() const { return LastOCCConflictCount; }
+
+    // 명시적 트랜잭션 시작. 비관적 락(UPDLOCK) 조회를 쓰려면 조회 전에 호출한다.
+    // 이후 SaveChanges 가 같은 트랜잭션을 Commit/Rollback 한다. SaveChanges 없이 소멸하면 Rollback.
+    bool BeginTransaction()
+    {
+        if (bInTransaction) return true;
+        if (!dbConnection || !dbConnection->Begin()) return false;
+        bInTransaction = true;
+        return true;
+    }
+    bool InTransaction() const { return bInTransaction; }
+
     DBConnection* GetConnection() { return dbConnection; }
     
     void AddChanges(ChangeEntry&& changes)
@@ -731,6 +774,12 @@ private:
     std::vector<ChangeEntry> Changes;
     std::vector<ChangeEntry> OCCChanges;
     std::map<std::tuple<std::type_index, DbValue>, void*> IdentityMap;
+
+    // 직전 SaveChanges 에서 OCC 충돌로 격리된 엔트리 수. 성공 시 0.
+    int32 LastOCCConflictCount = 0;
+
+    // BeginTransaction() 또는 SaveChanges() 가 연 트랜잭션이 아직 열려 있는지.
+    bool bInTransaction = false;
 
     DBConnection* dbConnection = nullptr;
 };

@@ -111,6 +111,18 @@ extern Atomic<bool>        GRemoveFriendSuccess;
 // 친구 액션 결과 메시지(공통). 한 번에 한 액션만 진행되므로 단일 변수로 충분.
 extern String              GFriendActionMessage;
 
+// 잔고 조회 응답 상태. MyPageLoop 진입 시 요청, 수신 핸들러가 세팅.
+// GMyBalance 는 이체 응답 / 수신 알림에서도 갱신된다.
+extern Atomic<bool>        GBalanceDone;
+extern Atomic<bool>        GBalanceSuccess;
+extern Atomic<int64>       GMyBalance;
+
+// 이체 응답 상태.
+extern Atomic<bool>        GTransferDone;
+extern Atomic<bool>        GTransferSuccess;
+extern String              GTransferMessage;
+extern Atomic<int32>       GTransferRetries;   // 서버가 OCC 충돌로 재시도한 횟수
+
 
 // 클라이언트 애플리케이션 최상위 클래스.
 // 서버 연결, 회원가입/로그인, 채팅 흐름을 관리한다.

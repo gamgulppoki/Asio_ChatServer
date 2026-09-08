@@ -8,10 +8,13 @@
 template<> inline void describe_entity<User>(EntityBuilder<User>& b)
 {
     b.field("Id", &User::Id);
-    b.field("Email", &User::Email);
-    b.field("Nickname", &User::Nickname);
-    b.field("Password", &User::Password);
+    b.field("Email", &User::Email, 100);
+    b.field("Nickname", &User::Nickname, 60);
+    b.field("Password", &User::Password, 256);
+    b.field("Balance", &User::Balance);
     b.primary_key("Id");
+    b.index("UX_User_Email", true, { "Email" });
+    b.index("IX_User_Nickname", false, { "Nickname" });
     b.table("User");
 }
 
@@ -21,6 +24,7 @@ template<> struct Col<User>
     static inline ColumnRef<std::string> Email{"Email"};
     static inline ColumnRef<std::string> Nickname{"Nickname"};
     static inline ColumnRef<std::string> Password{"Password"};
+    static inline ColumnRef<int64> Balance{"Balance"};
 };
 
 template<> inline void describe_entity<Friendship>(EntityBuilder<Friendship>& b)
@@ -28,10 +32,12 @@ template<> inline void describe_entity<Friendship>(EntityBuilder<Friendship>& b)
     b.field("Id", &Friendship::Id);
     b.field("FromUserId", &Friendship::FromUserId);
     b.field("ToUserId", &Friendship::ToUserId);
-    b.field("Status", &Friendship::Status);
+    b.field("Status", &Friendship::Status, 16);
     b.navigation("FromUser", "FromUserId", "User", &Friendship::FromUser);
     b.navigation("ToUser", "ToUserId", "User", &Friendship::ToUser);
     b.primary_key("Id");
+    b.index("UX_Friendship_FromUserId_ToUserId", true, { "FromUserId", "ToUserId" });
+    b.index("IX_Friendship_ToUserId_Status", false, { "ToUserId", "Status" });
     b.table("Friendship");
 }
 

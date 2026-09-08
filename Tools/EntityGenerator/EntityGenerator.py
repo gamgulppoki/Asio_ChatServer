@@ -1,11 +1,21 @@
 """
-ORMTest codegen.
+ORM codegen.
 
-Scans Entities/*.h for [[db::entity]] attributes and renders
-EntitiesGenerated.h via a Jinja2 template.
+Server/DB/Entities/*.h 에서 DB_ENTITY 표식이 붙은 struct 를 스캔해
+Server/DB/Generated/EntitiesGenerated.h (describe_entity / Col<T> 특수화) 를 Jinja2 템플릿으로 렌더링한다.
+
+읽는 표식 (Server/DB/ORM/Attributes.h):
+    DB_ENTITY                       엔티티
+    FK(col)                         Navigation<T> 의 외래키 컬럼
+    LEN(n)                          문자열 컬럼 길이 → NVARCHAR(n)
+    INDEX / UNIQUE                  단일 컬럼 (유니크) 인덱스
+    COMPOSITE_INDEX(a, b, ...)      복합 인덱스 (struct 본문 문장)
+    COMPOSITE_UNIQUE(a, b, ...)     복합 유니크 인덱스
+
+인덱스 이름 규칙: IX_<Table>_<Col1>_<Col2>, 유니크는 UX_ 접두.
 
 Usage:
-    python codegen.py <entities_dir> <output_dir>
+    python EntityGenerator.py <entities_dir> <output_dir>
 
 Dependencies:
     pip install jinja2
@@ -56,26 +66,48 @@ def find_matching_brace(text: str, open_pos: int) -> int:
 PROPERTY_INNER   = re.compile(r'^\s*(?:Primary)?Property\s*<\s*(.+?)\s*>\s*$')
 NAVIGATION_INNER = re.compile(r'^\s*Navigation\s*<\s*(.+?)\s*>\s*$')
 FK_MACRO         = re.compile(r'\bFK\s*\(\s*(\w+)\s*\)')
+LEN_MACRO        = re.compile(r'\bLEN\s*\(\s*(\d+)\s*\)')
+COMPOSITE_MACRO  = re.compile(r'\b(COMPOSITE_INDEX|COMPOSITE_UNIQUE)\s*\(([^)]*)\)')
+INDEX_WORDS      = {'INDEX': False, 'UNIQUE': True}   # 단어 → unique 여부
 
 
 def parse_members(body: str):
+    """struct 본문 → (fields, indexes). indexes 는 {'unique': bool, 'columns': [..]} 목록 (이름은 나중에)."""
     fields = []
+    indexes = []
     for raw in body.split(';'):
         stmt = ACCESS_SPEC.sub('', raw)
         stmt = ATTRIBUTE.sub('', stmt).strip()
         if not stmt:
             continue
 
-        # FK(XXX) 매크로 추출 후 제거. '(' 스킵 체크 이전에 처리해야 함
+        # 복합 인덱스 문장: COMPOSITE_UNIQUE(A, B) — 필드가 아니므로 여기서 소비
+        comp = COMPOSITE_MACRO.search(stmt)
+        if comp:
+            columns = [c.strip() for c in comp.group(2).split(',') if c.strip()]
+            indexes.append({'unique': comp.group(1) == 'COMPOSITE_UNIQUE', 'columns': columns})
+            continue
+
+        # FK(XXX) / LEN(n) 매크로 추출 후 제거. '(' 스킵 체크 이전에 처리해야 함
         fk_match = FK_MACRO.search(stmt)
         fk_column = fk_match.group(1) if fk_match else None
         if fk_match:
             stmt = FK_MACRO.sub('', stmt).strip()
 
+        len_match = LEN_MACRO.search(stmt)
+        max_len = int(len_match.group(1)) if len_match else 0
+        if len_match:
+            stmt = LEN_MACRO.sub('', stmt).strip()
+
         if '(' in stmt:              # skip methods
             continue
         stmt = re.sub(r'=.*$', '', stmt).strip()
         tokens = stmt.split()
+
+        # INDEX / UNIQUE 단어 추출
+        index_flags = [INDEX_WORDS[t] for t in tokens if t in INDEX_WORDS]
+        tokens = [t for t in tokens if t not in INDEX_WORDS]
+
         if len(tokens) < 2:
             continue
         name = tokens[-1]
@@ -102,8 +134,18 @@ def parse_members(body: str):
             'is_pk': is_pk,
             'is_nav': is_nav,
             'fk_column': fk_column,
+            'max_len': max_len,
         })
-    return fields
+
+        if index_flags and not is_nav:
+            # UNIQUE 와 INDEX 를 같이 쓰면 UNIQUE 가 이긴다
+            indexes.append({'unique': any(index_flags), 'columns': [name]})
+    return fields, indexes
+
+
+def index_name(entity: str, index: dict) -> str:
+    prefix = 'UX' if index['unique'] else 'IX'
+    return f"{prefix}_{entity}_{'_'.join(index['columns'])}"
 
 
 def parse_entities(text: str):
@@ -118,9 +160,18 @@ def parse_entities(text: str):
         if brace_end < 0:
             continue
         body = text[brace_start + 1:brace_end]
-        members = parse_members(body)
+        members, indexes = parse_members(body)
         pk = next((f['name'] for f in members if f.get('is_pk')), None)
-        entities.append({'name': name, 'members': members, 'pk': pk})
+
+        field_names = {f['name'] for f in members if not f['is_nav']}
+        for ix in indexes:
+            unknown = [c for c in ix['columns'] if c not in field_names]
+            if unknown:
+                print(f"error: {name}: index refers to unknown column(s) {unknown}", file=sys.stderr)
+                sys.exit(1)
+            ix['name'] = index_name(name, ix)
+
+        entities.append({'name': name, 'members': members, 'pk': pk, 'indexes': indexes})
     return entities
 
 

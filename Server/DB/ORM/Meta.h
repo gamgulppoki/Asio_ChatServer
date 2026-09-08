@@ -16,6 +16,7 @@ struct FieldMeta
 {
     TypeTag DataType;
     std::string DataName;
+    int32 MaxLen = 0;   // STRING 전용. NVARCHAR(MaxLen). 0 이면 기본값(4000)
 
     std::function<DbValue(const void*)> Read;
     std::function<DbValue(const void*)> ReadOrigin;
@@ -62,6 +63,15 @@ struct RelationMeta
     std::function<void(void*, void*)> BindObj;
 };
 
+// 인덱스 메타. codegen 이 INDEX / UNIQUE / COMPOSITE_* 표식에서 만든다.
+// Sql.h 의 create_indexes_sql 이 CREATE [UNIQUE] NONCLUSTERED INDEX 로 바꾼다.
+struct IndexMeta
+{
+    std::string Name;                   // IX_User_Nickname / UX_User_Email ...
+    bool Unique = false;
+    std::vector<std::string> Columns;   // 선언 순서 = 키 순서
+};
+
 struct EntityMeta
 {
     std::string TableName; // 테이블 이름
@@ -69,6 +79,7 @@ struct EntityMeta
     std::unordered_map<std::string, size_t> FieldIndex; // 이름 -> 인덱스
     std::string PrimaryKeyName; // PK 필드 이름
     std::vector<RelationMeta> Relations; // 관계 메타 (Navigation 매칭용)
+    std::vector<IndexMeta> Indexes; // 인덱스 메타
 
     std::function<void*()> Factory; // 인스턴스 생성
     std::function<void(void*)> Destroyer; // 인스턴스 소멸 (타입별 delete)
@@ -107,11 +118,13 @@ struct EntityBuilder
         };
     }
 
+    // maxLen: 문자열 컬럼 길이 (codegen 이 LEN(n) 표식에서 넘김). 0 이면 NVARCHAR(4000).
     template <typename M>
-    void field(std::string name, Property<M> T::* member)
+    void field(std::string name, Property<M> T::* member, int32 maxLen = 0)
     {
         FieldMeta tmpMeta;
         tmpMeta.DataName = name;
+        tmpMeta.MaxLen = maxLen;
 
         if constexpr (std::is_same_v<M, int64>)
             tmpMeta.DataType = TypeTag::INT;
@@ -161,10 +174,11 @@ struct EntityBuilder
     // PrimaryProperty 오버로드: 같은 람다 등록 + 자동 PK 등록.
     // 사용자가 PrimaryProperty<T> 멤버를 선언하면 codegen 의 b.field 호출이 이쪽으로 매칭됨.
     template <typename M>
-    void field(std::string name, PrimaryProperty<M> T::* member)
+    void field(std::string name, PrimaryProperty<M> T::* member, int32 maxLen = 0)
     {
         FieldMeta tmpMeta;
         tmpMeta.DataName = name;
+        tmpMeta.MaxLen = maxLen;
 
         if constexpr (std::is_same_v<M, int64>)
             tmpMeta.DataType = TypeTag::INT;
@@ -242,6 +256,11 @@ struct EntityBuilder
     void primary_key(std::string name)
     {
         Meta.PrimaryKeyName = std::move(name);
+    }
+
+    void index(std::string name, bool unique, std::vector<std::string> columns)
+    {
+        Meta.Indexes.push_back(IndexMeta{ std::move(name), unique, std::move(columns) });
     }
 
     void Build(EntityMeta& meta)

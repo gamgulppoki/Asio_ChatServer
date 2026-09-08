@@ -1,0 +1,18 @@
+테이블 'User'. 검색 횟수 1, 논리적 읽기 4, 물리적 읽기 0, 페이지 서버 읽기 0, 미리 읽기 0, 페이지 서버 미리 읽기 0, lob 논리적 읽기 0, lob 물리적 읽기 0, lob 페이지 서버 읽기 0, lob 미리 읽기 0, lob 페이지 서버 미리 읽기 0.
+테이블 'User'. 검색 횟수 0, 논리적 읽기 4, 물리적 읽기 0, 페이지 서버 읽기 0, 미리 읽기 0, 페이지 서버 미리 읽기 0, lob 논리적 읽기 0, lob 물리적 읽기 0, lob 페이지 서버 읽기 0, lob 미리 읽기 0, lob 페이지 서버 미리 읽기 0.
+StmtText
+--------
+SELECT t0.[Id], t0.[Email], t0.[Nickname], t0.[Password], t0.[Balance] FROM [User] t0 WHERE t0.[Nickname] = N'bulk5000'
+StmtText
+--------
+  |--Nested Loops(Inner Join, OUTER REFERENCES:([t0].[Id]))
+       |--Index Seek(OBJECT:([ChatServerDB].[dbo].[User].[IX_User_Nickname] AS [t0]), SEEK:([t0].[Nickname]=N'bulk5000') ORDERED FORWARD)
+       |--Clustered Index Seek(OBJECT:([ChatServerDB].[dbo].[User].[PK__User__3214EC07F8D00918] AS [t0]), SEEK:([t0].[Id]=[ChatServerDB].[dbo].[User].[Id] as [t0].[Id]) LOOKUP ORDERED FORWARD)
+StmtText
+--------
+SELECT t0.[Id], t0.[Email], t0.[Nickname], t0.[Password], t0.[Balance] FROM [User] t0 WHERE t0.[Email] = N'bulk5000@loadtest.local'
+StmtText
+--------
+  |--Nested Loops(Inner Join, OUTER REFERENCES:([t0].[Id]))
+       |--Index Seek(OBJECT:([ChatServerDB].[dbo].[User].[UX_User_Email] AS [t0]), SEEK:([t0].[Email]=[@1]) ORDERED FORWARD)
+       |--Clustered Index Seek(OBJECT:([ChatServerDB].[dbo].[User].[PK__User__3214EC07F8D00918] AS [t0]), SEEK:([t0].[Id]=[ChatServerDB].[dbo].[User].[Id] as [t0].[Id]) LOOKUP ORDERED FORWARD)

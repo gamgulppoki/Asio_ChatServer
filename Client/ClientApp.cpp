@@ -242,7 +242,7 @@ void ClientApp::AuthLoop()
 	{
 		// 메뉴 화면
 		ConsoleUI::ClearScreen();
-		ConsoleUI::DrawHeaderBox("Webzen Chat", "로그인 또는 회원가입");
+		ConsoleUI::DrawHeaderBox("ChatServer", "로그인 또는 회원가입");
 		std::cout << "\n";
 		std::cout << "  1. 회원가입\n";
 		std::cout << "  2. 로그인\n";
@@ -265,7 +265,7 @@ void ClientApp::AuthLoop()
 		{
 			// 회원가입 입력 화면
 			ConsoleUI::ClearScreen();
-			ConsoleUI::DrawHeaderBox("Webzen Chat", "회원가입");
+			ConsoleUI::DrawHeaderBox("ChatServer", "회원가입");
 			std::cout << "\n";
 
 			String Name, Email, Password;
@@ -306,7 +306,7 @@ void ClientApp::AuthLoop()
 		{
 			// 로그인 입력 화면
 			ConsoleUI::ClearScreen();
-			ConsoleUI::DrawHeaderBox("Webzen Chat", "로그인");
+			ConsoleUI::DrawHeaderBox("ChatServer", "로그인");
 			std::cout << "\n";
 
 			String Email, Password;
@@ -360,7 +360,7 @@ void ClientApp::LobbyLoop()
 	while (State_ == ClientState::Lobby)
 	{
 		ConsoleUI::ClearScreen();
-		ConsoleUI::DrawHeaderBox("Webzen Chat — 로비", GMyNickname + " 님 환영합니다");
+		ConsoleUI::DrawHeaderBox("ChatServer — 로비", GMyNickname + " 님 환영합니다");
 		std::cout << "\n";
 		std::cout << "  1. 방 생성\n";
 		std::cout << "  2. 방 입장\n";
@@ -482,7 +482,7 @@ void ClientApp::LobbyLoop()
 		{
 			// 방 생성 화면
 			ConsoleUI::ClearScreen();
-			ConsoleUI::DrawHeaderBox("Webzen Chat — 방 생성");
+			ConsoleUI::DrawHeaderBox("ChatServer — 방 생성");
 			std::cout << "\n";
 			std::cout << ConsoleUI::Color::Hint << "  방 이름 : " << ConsoleUI::Color::Reset;
 
@@ -524,7 +524,7 @@ void ClientApp::LobbyLoop()
 			WaitForResponse(GRoomListDone);
 
 			ConsoleUI::ClearScreen();
-			ConsoleUI::DrawHeaderBox("Webzen Chat — 방 리스트");
+			ConsoleUI::DrawHeaderBox("ChatServer — 방 리스트");
 			std::cout << "\n";
 
 			if (!GRoomListDone)
@@ -759,12 +759,24 @@ void ClientApp::MyPageLoop()
 
 	while (State_ == ClientState::MyPage)
 	{
+		// 진입/액션마다 잔고를 서버에서 다시 읽는다 (이체 수신으로 바뀌었을 수 있음)
+		GBalanceDone = false;
+		GBalanceSuccess = false;
+		Protocol::C_GET_BALANCE BalancePkt;
+		SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(BalancePkt));
+		WaitForResponse(GBalanceDone);
+
+		const String BalanceText = (GBalanceDone && GBalanceSuccess)
+			? std::to_string(GMyBalance.load()) + " P"
+			: "조회 실패";
+
 		ConsoleUI::ClearScreen();
-		ConsoleUI::DrawHeaderBox("마이페이지", GMyNickname);
+		ConsoleUI::DrawHeaderBox("마이페이지", GMyNickname + "  ·  잔고 " + BalanceText);
 		std::cout << "\n";
 		std::cout << "  1. 닉네임 수정\n";
-		std::cout << "  2. 계정 탈퇴\n";
-		std::cout << "  3. 뒤로가기\n";
+		std::cout << "  2. 포인트 이체\n";
+		std::cout << "  3. 계정 탈퇴\n";
+		std::cout << "  4. 뒤로가기\n";
 		std::cout << "\n";
 		ConsoleUI::DrawDivider();
 		if (!LastMessage.empty())
@@ -829,6 +841,61 @@ void ClientApp::MyPageLoop()
 		}
 		else if (iMenuChoice == 2)
 		{
+			std::cout << "\n" << ConsoleUI::Color::Hint << "  받는 사람 닉네임 : " << ConsoleUI::Color::Reset;
+			String TargetNickname;
+			std::getline(std::cin, TargetNickname);
+
+			std::cout << ConsoleUI::Color::Hint << "  보낼 포인트     : " << ConsoleUI::Color::Reset;
+			String AmountInput;
+			std::getline(std::cin, AmountInput);
+
+			int64 Amount = 0;
+			try { Amount = std::stoll(AmountInput); }
+			catch (const std::exception&)
+			{
+				LastMessage = "금액이 올바르지 않습니다.";
+				LastMessageColor = ConsoleUI::Color::Error;
+				continue;
+			}
+
+			if (TargetNickname.empty() || Amount <= 0)
+			{
+				LastMessage = "닉네임과 1 이상의 금액을 입력하세요.";
+				LastMessageColor = ConsoleUI::Color::Error;
+				continue;
+			}
+
+			GTransferDone = false;
+			GTransferSuccess = false;
+
+			Protocol::C_TRANSFER TransferPkt;
+			TransferPkt.set_target_nickname(TargetNickname);
+			TransferPkt.set_amount(Amount);
+			SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(TransferPkt));
+			WaitForResponse(GTransferDone);
+
+			if (!GTransferDone)
+			{
+				LastMessage = "서버 응답 없음";
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
+			else if (!GTransferSuccess)
+			{
+				LastMessage = "이체 실패: " + GTransferMessage;
+				LastMessageColor = ConsoleUI::Color::Error;
+			}
+			else
+			{
+				LastMessage = TargetNickname + " 님에게 " + std::to_string(Amount) + " P 를 보냈습니다. (잔고 "
+				            + std::to_string(GMyBalance.load()) + " P";
+				if (GTransferRetries > 0)
+					LastMessage += ", 충돌 재시도 " + std::to_string(GTransferRetries.load()) + "회";
+				LastMessage += ")";
+				LastMessageColor = ConsoleUI::Color::Success;
+			}
+		}
+		else if (iMenuChoice == 3)
+		{
 			std::cout << "\n" << ConsoleUI::Color::Error
 			          << "  정말로 탈퇴하시겠습니까? (y/N) : "
 			          << ConsoleUI::Color::Reset;
@@ -861,7 +928,7 @@ void ClientApp::MyPageLoop()
 			else
 			{
 				ConsoleUI::ClearScreen();
-				ConsoleUI::DrawHeaderBox("Webzen Chat", "계정 탈퇴가 완료되었습니다");
+				ConsoleUI::DrawHeaderBox("ChatServer", "계정 탈퇴가 완료되었습니다");
 				std::cout << "\n";
 				std::cout << ConsoleUI::Color::Hint << "  엔터를 눌러 종료..." << ConsoleUI::Color::Reset << std::flush;
 				String Dummy;
@@ -870,14 +937,14 @@ void ClientApp::MyPageLoop()
 				return;
 			}
 		}
-		else if (iMenuChoice == 3)
+		else if (iMenuChoice == 4)
 		{
 			State_ = ClientState::Lobby;
 			return;
 		}
 		else
 		{
-			LastMessage = "잘못된 선택입니다. 1~3 중 선택해주세요.";
+			LastMessage = "잘못된 선택입니다. 1~4 중 선택해주세요.";
 			LastMessageColor = ConsoleUI::Color::Error;
 		}
 	}

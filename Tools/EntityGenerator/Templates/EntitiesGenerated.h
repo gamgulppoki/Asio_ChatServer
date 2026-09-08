@@ -14,12 +14,15 @@ template<> inline void describe_entity<{{ e.name }}>(EntityBuilder<{{ e.name }}>
 {% if field.is_nav %}
     b.navigation("{{ field.name }}", "{{ field.fk_column }}", "{{ field.inner_type }}", &{{ e.name }}::{{ field.name }});
 {% else %}
-    b.field("{{ field.name }}", &{{ e.name }}::{{ field.name }});
+    b.field("{{ field.name }}", &{{ e.name }}::{{ field.name }}{% if field.max_len %}, {{ field.max_len }}{% endif %});
 {% endif %}
 {% endfor %}
 {% if e.pk %}
     b.primary_key("{{ e.pk }}");
 {% endif %}
+{% for ix in e.indexes %}
+    b.index("{{ ix.name }}", {{ 'true' if ix.unique else 'false' }}, { {% for c in ix.columns %}"{{ c }}"{% if not loop.last %}, {% endif %}{% endfor %} });
+{% endfor %}
     b.table("{{ e.name }}");
 }
 

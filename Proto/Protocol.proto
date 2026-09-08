@@ -212,3 +212,39 @@ message S_REMOVE_FRIEND
 	bool success = 1;
 	string msg = 2;
 }
+
+// ==========================
+// 포인트 (잔고 조회 / 이체)
+// ==========================
+
+message C_GET_BALANCE
+{
+}
+
+message S_GET_BALANCE
+{
+	bool success = 1;
+	int64 balance = 2;
+}
+
+message C_TRANSFER
+{
+	string target_nickname = 1;
+	int64 amount = 2;
+}
+
+message S_TRANSFER
+{
+	bool success = 1;
+	string msg = 2;
+	int64 my_balance = 3;
+	int32 retries = 4;      // OCC 충돌로 재시도한 횟수 (0 이면 첫 시도에 성공)
+}
+
+// 수신자가 온라인이면 서버가 push 로 알려준다.
+message S_TRANSFER_RECEIVED
+{
+	string from_name = 1;
+	int64 amount = 2;
+	int64 my_balance = 3;
+}

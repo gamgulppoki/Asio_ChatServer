@@ -13,7 +13,7 @@
 const int32 iPort = 9000;
 const int32 iDBPoolCount = 10;
 const WCHAR* DBConnectionString =
-	L"DRIVER={ODBC Driver 17 for SQL Server};SERVER=.\\SQLEXPRESS;DATABASE=WebzenDB;Trusted_Connection=Yes;";
+	L"DRIVER={ODBC Driver 17 for SQL Server};SERVER=.\\SQLEXPRESS;DATABASE=ChatServerDB;Trusted_Connection=Yes;";
 
 // 전역 싱글톤 바인딩 + 패킷 핸들러 초기화
 ServerApp::ServerApp()
@@ -87,6 +87,27 @@ void ServerApp::InitDB()
 				spdlog::error("[ServerApp] Schema apply failed for {}", meta.TableName);
 				return;
 			}
+
+			// 기존 테이블에 없는 컬럼은 ALTER TABLE ADD 로 보강 (추가 전용 마이그레이션)
+			for (const auto& alterSql : add_missing_columns_sql(meta))
+			{
+				if (!Scope->Execute(alterSql))
+				{
+					spdlog::error("[ServerApp] Column migration failed for {}", meta.TableName);
+					return;
+				}
+			}
+
+			// 인덱스 (없을 때만 생성)
+			for (const auto& indexSql : create_indexes_sql(meta))
+			{
+				if (!Scope->Execute(indexSql))
+				{
+					spdlog::error("[ServerApp] Index creation failed for {}", meta.TableName);
+					return;
+				}
+			}
+			spdlog::info("[ServerApp] Schema ready: {} ({} indexes)", meta.TableName, meta.Indexes.size());
 		}
 	}
 }

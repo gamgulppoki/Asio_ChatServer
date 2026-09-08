@@ -7,11 +7,47 @@
 #include "../Security/InputValidator.h"
 #include "StringUtils.h"
 #include <spdlog/spdlog.h>
+#include <algorithm>
+#include <cstdlib>
+#include <cstring>
 
 #include "SessionManager.h"
 #include "DB/Entities/Entities.h"
 #include "DB/ORM/DBContext.h"
 #include "DB/Generated/EntitiesGenerated.h"
+
+namespace
+{
+	// 회원가입 시 지급하는 초기 포인트. 이체 데모용 시드값.
+	constexpr int64 kInitialBalance = 10000;
+
+	// 이체 1건 상한. 입력 오류와 int64 오버플로 방지.
+	constexpr int64 kMaxTransferAmount = 1'000'000'000;
+
+	// OCC 충돌 시 재시도 상한. 넘으면 실패로 응답한다 (무한 루프·기아 방지).
+	constexpr int32 kMaxTransferRetry = 3;
+
+	// 이체 동시성 제어 방식.
+	//   OCC     — 락 없이 읽고 UPDATE 시 origin 비교로 충돌 감지, 충돌하면 재시도 (낙관적)
+	//   UpdLock — 트랜잭션을 먼저 열고 두 행을 UPDLOCK 으로 읽어 Commit 까지 독점 (비관적)
+	// 환경 변수 CHATSERVER_TRANSFER_LOCK = occ | updlock (기본 occ).
+	// 부하 테스트에서 재빌드 없이 두 방식을 같은 코드 위에서 비교하기 위한 스위치.
+	enum class TransferLockMode { OCC, UpdLock };
+
+	TransferLockMode GetTransferLockMode()
+	{
+		static const TransferLockMode Mode = []
+		{
+			char Env[32] = {};
+			size_t Len = 0;
+			getenv_s(&Len, Env, sizeof(Env), "CHATSERVER_TRANSFER_LOCK");   // MSVC 안전 버전 (없으면 빈 문자열)
+			const bool bUpdLock = _stricmp(Env, "updlock") == 0;
+			spdlog::info("[Transfer] lock mode = {}", bUpdLock ? "UPDLOCK (pessimistic)" : "OCC (optimistic)");
+			return bUpdLock ? TransferLockMode::UpdLock : TransferLockMode::OCC;
+		}();
+		return Mode;
+	}
+}
 
 // 회원가입 요청을 처리한���.
 bool Handle_C_REGISTER(SharedPtr<Session> SessionPtr, Protocol::C_REGISTER& Pkt)
@@ -72,7 +108,8 @@ bool Handle_C_REGISTER(SharedPtr<Session> SessionPtr, Protocol::C_REGISTER& Pkt)
 	newUserPtr->Nickname = Pkt.name();
 	newUserPtr->Email = Pkt.email();
 	newUserPtr->Password = Pkt.password();
-	
+	newUserPtr->Balance = kInitialBalance;
+
 	dbContext.Set<User>().Add(std::move(newUserPtr));
 	
 	if (!dbContext.SaveChanges())
@@ -722,7 +759,9 @@ bool Handle_C_GET_PENDING_FRIENDS(SharedPtr<Session> SessionPtr, Protocol::C_GET
 	dbContext.SetDBConnection(Scope.Get());
 
 	// 받은 pending 요청 조회 + 요청자 User 정보 eager load
+	// NOLOCK: 목록 화면은 잠깐 틀려도 된다 (다음 진입 때 다시 읽음). 락 대기 없이 바로 응답.
 	auto pendings = dbContext.Set<Friendship>()
+		.WithHint(Hint::NoLock)
 		.Include(&Friendship::FromUser)
 		.Where(Col<Friendship>::ToUserId == MyUserId)
 		.Where(Col<Friendship>::Status   == std::string(FriendStatus::Pending))
@@ -761,13 +800,16 @@ bool Handle_C_GET_FRIEND_LIST(SharedPtr<Session> SessionPtr, Protocol::C_GET_FRI
 	DBContext dbContext;
 	dbContext.SetDBConnection(Scope.Get());
 
+	// NOLOCK: 친구 목록은 잠깐 틀려도 되는 조회. 수락/삭제 트랜잭션과 겹쳐도 기다리지 않는다.
 	auto friendList1 = dbContext.Set<Friendship>()
+		.WithHint(Hint::NoLock)
 		.Include(&Friendship::ToUser)
 		.Where(Col<Friendship>::FromUserId == MyUserId)
 		.Where(Col<Friendship>::Status   == std::string(FriendStatus::Accepted))
 		.ToList();
-	
+
 	auto friendList2 = dbContext.Set<Friendship>()
+		.WithHint(Hint::NoLock)
 		.Include(&Friendship::FromUser)
 		.Where(Col<Friendship>::ToUserId == MyUserId)
 		.Where(Col<Friendship>::Status   == std::string(FriendStatus::Accepted))
@@ -886,4 +928,187 @@ bool Handle_C_REMOVE_FRIEND(SharedPtr<Session> SessionPtr, Protocol::C_REMOVE_FR
 	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
 	spdlog::info("Friend removed: {} <-> {}", MyUserId, TargetId);
 	return true;
+}
+
+// ==========================
+// 포인트 (잔고 조회 / 이체)
+// ==========================
+
+// 본인 잔고 조회. 마이페이지 진입 시 호출된다.
+bool Handle_C_GET_BALANCE(SharedPtr<Session> SessionPtr, Protocol::C_GET_BALANCE& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	Protocol::S_GET_BALANCE ResPkt;
+
+	const uint64 UserId = GameSessionPtr->GetPlayerInfo().PlayerId;
+	if (UserId == 0)
+	{
+		ResPkt.set_success(false);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	DBConnectionScope Scope(GDBPool);
+	DBContext dbContext;
+	dbContext.SetDBConnection(Scope.Get());
+
+	auto Users = dbContext.Set<User>().Where(Col<User>::Id == static_cast<int64>(UserId)).ToList();
+	if (Users.empty())
+	{
+		ResPkt.set_success(false);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
+	ResPkt.set_success(true);
+	ResPkt.set_balance(Users.front()->Balance.value());
+	GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+	return true;
+}
+
+// 포인트 이체. 원장의 기본 동작을 축소한 시나리오:
+//   두 계좌를 읽고 → 잔고를 검증하고 → 두 행을 한 트랜잭션에서 갱신한다.
+//
+// 동시성 (GetTransferLockMode 로 선택):
+//   OCC     — 락 없이 읽는다. SaveChanges 의 UPDATE WHERE 절이 로드 시점 값 전체를 매칭하므로
+//             같은 계좌를 다른 요청이 먼저 바꿨다면 rowCount 0 → 전체 Rollback → 여기서 재시도.
+//             매 시도마다 DBContext 를 새로 만들어 두 계좌를 DB 에서 다시 읽는다 (Identity Map 초기화).
+//   UpdLock — 트랜잭션을 먼저 열고 두 행을 WITH (UPDLOCK, ROWLOCK) 으로 읽는다. Commit 까지 남이
+//             못 고치므로 충돌 자체가 없고, 경쟁 요청은 실패 대신 대기한다. 잔고처럼 실패 비용이 큰 곳용.
+// 데드락 방지:
+//   OCC     — 두 UPDATE 는 Identity Map 순회 순서(= PK 오름차순)로 나간다.
+//   UpdLock — 두 SELECT 를 PK 오름차순으로 한다.
+//   어느 쪽이든 A→B 와 B→A 가 동시에 와도 락 획득 순서가 같아 교착이 생기지 않는다.
+bool Handle_C_TRANSFER(SharedPtr<Session> SessionPtr, Protocol::C_TRANSFER& Pkt)
+{
+	auto GameSessionPtr = std::static_pointer_cast<GameSession>(SessionPtr);
+	Protocol::S_TRANSFER ResPkt;
+
+	auto Fail = [&](const char* Msg)
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg(Msg);
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	};
+
+	// 입력 검증
+	const uint64 UserId = GameSessionPtr->GetPlayerInfo().PlayerId;
+	if (UserId == 0)
+		return Fail("Not logged in");
+
+	const int64 Amount = Pkt.amount();
+	if (Amount <= 0 || Amount > kMaxTransferAmount)
+		return Fail("Invalid amount");
+
+	if (!InputValidator::IsValidName(Pkt.target_nickname()))
+		return Fail("Invalid nickname");
+
+	const std::string MyNickname = StringUtils::WideToUtf8(GameSessionPtr->GetPlayerInfo().Nickname);
+	if (Pkt.target_nickname() == MyNickname)
+		return Fail("Cannot transfer to yourself");
+
+	DBConnectionScope Scope(GDBPool);
+	const TransferLockMode LockMode = GetTransferLockMode();
+	const int64 MyId = static_cast<int64>(UserId);
+
+	for (int32 Retry = 0; Retry <= kMaxTransferRetry; ++Retry)
+	{
+		DBContext dbContext;
+		dbContext.SetDBConnection(Scope.Get());
+
+		User* From = nullptr;
+		User* To   = nullptr;
+
+		if (LockMode == TransferLockMode::UpdLock)
+		{
+			// 1-a. 대상 Id 조회는 별도 컨텍스트로 (같은 컨텍스트면 Identity Map 이
+			//      락 없이 읽은 객체를 재사용해서, 아래 UPDLOCK 조회 결과를 버리게 된다)
+			int64 ToId = 0;
+			{
+				DBContext Lookup;
+				Lookup.SetDBConnection(Scope.Get());
+				auto Found = Lookup.Set<User>().Where(Col<User>::Nickname == Pkt.target_nickname()).ToList();
+				if (Found.empty())
+					return Fail("Target not found");
+				ToId = Found.front()->Id.value();
+			}
+			if (ToId == MyId)
+				return Fail("Cannot transfer to yourself");
+
+			// 1-b. 트랜잭션을 먼저 열고 PK 오름차순으로 UPDLOCK 조회 → Commit 까지 두 행 독점
+			if (!dbContext.BeginTransaction())
+				return Fail("Database error");
+
+			const int64 LowId  = std::min(MyId, ToId);
+			const int64 HighId = std::max(MyId, ToId);
+			auto LowRows  = dbContext.Set<User>().WithHint(Hint::UpdLock).Where(Col<User>::Id == LowId).ToList();
+			auto HighRows = dbContext.Set<User>().WithHint(Hint::UpdLock).Where(Col<User>::Id == HighId).ToList();
+			if (LowRows.empty() || HighRows.empty())
+				return Fail("User not found");            // dbContext 소멸자가 Rollback
+
+			From = (LowId == MyId) ? LowRows.front() : HighRows.front();
+			To   = (LowId == MyId) ? HighRows.front() : LowRows.front();
+		}
+		else
+		{
+			// 1. 두 계좌 조회 (락 없음, 매 시도마다 최신 값)
+			auto FromUsers = dbContext.Set<User>().Where(Col<User>::Id == MyId).ToList();
+			auto ToUsers   = dbContext.Set<User>().Where(Col<User>::Nickname == Pkt.target_nickname()).ToList();
+			if (FromUsers.empty())
+				return Fail("User not found");
+			if (ToUsers.empty())
+				return Fail("Target not found");
+
+			From = FromUsers.front();
+			To   = ToUsers.front();
+			if (From->Id.value() == To->Id.value())
+				return Fail("Cannot transfer to yourself");
+		}
+
+		// 2. 잔고 검증 (읽은 시점 기준. 이후 바뀌었다면 OCC 가 잡는다)
+		if (From->Balance.value() < Amount)
+			return Fail("Insufficient balance");
+
+		// 3. 두 행 갱신 (Property 가 dirty 마킹)
+		From->Balance -= Amount;
+		To->Balance   += Amount;
+
+		// 4. 한 트랜잭션으로 flush
+		if (dbContext.SaveChanges())
+		{
+			ResPkt.set_success(true);
+			ResPkt.set_msg("Transfer complete");
+			ResPkt.set_my_balance(From->Balance.value());
+			ResPkt.set_retries(Retry);
+			GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+			spdlog::info("Transfer {} -> {} : {} (retries={})", MyNickname, Pkt.target_nickname(), Amount, Retry);
+
+			// 수신자가 온라인이면 push 알림
+			if (auto TargetSession = GSessionManager->GetSession(static_cast<uint64>(To->Id.value())))
+			{
+				Protocol::S_TRANSFER_RECEIVED Noti;
+				Noti.set_from_name(MyNickname);
+				Noti.set_amount(Amount);
+				Noti.set_my_balance(To->Balance.value());
+				TargetSession->Send(ClientPacketHandler::MakeSendBuffer(Noti));
+			}
+			return true;
+		}
+
+		// 5. 실패 분기: OCC 충돌이면 재시도, 그 외 DB 오류는 즉시 실패
+		if (!dbContext.HadOCCConflict())
+		{
+			spdlog::error("Transfer DB error: {} -> {} : {}", MyNickname, Pkt.target_nickname(), Amount);
+			return Fail("Database error");
+		}
+		if (Retry < kMaxTransferRetry)
+			spdlog::warn("Transfer OCC conflict: {} -> {} : {} (retrying {}/{})",
+				MyNickname, Pkt.target_nickname(), Amount, Retry + 1, kMaxTransferRetry);
+		else
+			spdlog::warn("Transfer OCC conflict: {} -> {} : {} (giving up after {} retries)",
+				MyNickname, Pkt.target_nickname(), Amount, kMaxTransferRetry);
+	}
+
+	return Fail("Transfer failed after retries. Please try again.");
 }
