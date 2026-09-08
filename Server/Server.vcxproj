@@ -199,6 +199,7 @@
     <ClInclude Include="DB\Entities\Person.h" />
     <ClInclude Include="DB\Generated\EntitiesGenerated.h" />
     <ClInclude Include="Security\InputValidator.h" />
+    <ClInclude Include="Security\PasswordHasher.h" />
     <None Include="..\Proto\Protocol.proto" />
   </ItemGroup>
   <ItemGroup>
@@ -216,6 +217,7 @@
     <ClCompile Include="DB\ORM\DBConnection.cpp" />
     <ClCompile Include="DB\ORM\Property.cpp" />
     <ClCompile Include="Security\InputValidator.cpp" />
+    <ClCompile Include="Security\PasswordHasher.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ServerCore\ServerCore.vcxproj">

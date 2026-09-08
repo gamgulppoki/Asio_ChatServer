@@ -5,6 +5,7 @@
 #include "../ServerGlobal.h"
 #include "../DB/DBConnectionPool.h"
 #include "../Security/InputValidator.h"
+#include "../Security/PasswordHasher.h"
 #include "StringUtils.h"
 #include <spdlog/spdlog.h>
 #include <algorithm>
@@ -104,10 +105,21 @@ bool Handle_C_REGISTER(SharedPtr<Session> SessionPtr, Protocol::C_REGISTER& Pkt)
 		return true;
 	}
 
+	// 비밀번호는 bcrypt 해시로만 저장한다. 평문은 이 핸들러를 벗어나지 않는다.
+	const std::string PasswordHash = PasswordHasher::Hash(Pkt.password());
+	if (PasswordHash.empty())
+	{
+		ResPkt.set_success(false);
+		ResPkt.set_msg("Server error");
+		spdlog::error("Password hashing failed for {}", Pkt.email());
+		GameSessionPtr->Send(ClientPacketHandler::MakeSendBuffer(ResPkt));
+		return true;
+	}
+
 	// User 구조체 채우기
 	newUserPtr->Nickname = Pkt.name();
 	newUserPtr->Email = Pkt.email();
-	newUserPtr->Password = Pkt.password();
+	newUserPtr->Password = PasswordHash;
 	newUserPtr->Balance = kInitialBalance;
 
 	dbContext.Set<User>().Add(std::move(newUserPtr));
@@ -163,8 +175,31 @@ bool Handle_C_LOGIN(SharedPtr<Session> SessionPtr, Protocol::C_LOGIN& Pkt)
 
 	User* FoundUser = Existing.front();
 
-	// 비밀번호 검증 (평문 비교)
-	if (FoundUser->Password.value() != Pkt.password())
+	// 비밀번호 검증 (bcrypt)
+	const std::string& Stored = FoundUser->Password.value();
+	bool bPasswordOk = false;
+	if (PasswordHasher::IsHash(Stored))
+	{
+		bPasswordOk = PasswordHasher::Verify(Pkt.password(), Stored);
+	}
+	else
+	{
+		// 해싱 도입 전에 만들어진 평문 행. 맞으면 이번 로그인에서 해시로 교체한다 (점진적 마이그레이션).
+		// 전체 행을 한 번에 바꿀 수 없는 이유: 평문을 모르면 해시를 만들 수 없다. 로그인 순간에만 평문을 안다.
+		bPasswordOk = (Stored == Pkt.password());
+		if (bPasswordOk)
+		{
+			const std::string Upgraded = PasswordHasher::Hash(Pkt.password());
+			if (!Upgraded.empty())
+			{
+				FoundUser->Password = Upgraded;
+				if (dbContext.SaveChanges())
+					spdlog::info("Password upgraded to bcrypt for {}", Pkt.email());
+			}
+		}
+	}
+
+	if (!bPasswordOk)
 	{
 		ResPkt.set_success(false);
 		ResPkt.set_msg("Wrong password");

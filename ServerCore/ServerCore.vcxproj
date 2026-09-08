@@ -182,6 +182,7 @@
     <ClInclude Include="Packet\RecvBuffer.h" />
     <ClInclude Include="Packet\PacketHeader.h" />
     <ClInclude Include="StringUtils.h" />
+    <ClInclude Include="ThirdParty\bcrypt\crypt_blowfish.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ServerCore.cpp" />
@@ -195,6 +196,7 @@
     <ClCompile Include="Packet\SendBuffer.cpp" />
     <ClCompile Include="Packet\RecvBuffer.cpp" />
     <ClCompile Include="StringUtils.cpp" />
+    <ClCompile Include="ThirdParty\bcrypt\crypt_blowfish.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
