@@ -123,7 +123,7 @@ namespace
 		{
 		case ChatMode::Shout:   Tag = "\033[38;5;208m[확성기]\033[0m"; break;
 		case ChatMode::Whisper: Tag = "\033[36m[귓속말]\033[0m";       break;
-		case ChatMode::AI:      Tag = "\033[35m[AI]\033[0m";           break;
+		case ChatMode::AI:      Tag = "\033[1m[AI]\033[0m";            break;
 		default: break;
 		}
 		ConsoleUI::MoveCursor(ChatPromptRow(), 1);
@@ -738,7 +738,7 @@ void ClientApp::ChatLoop()
 				SessionPtr_->Send(ServerPacketHandler::MakeSendBuffer(AiPkt));
 
 				// 로컬 에코 — 본인 발신이라 오른쪽. 응답은 S_AI_CHAT 조각이 오는 대로 왼쪽에 흐른다.
-				PrintChatMessage("\033[35m" + Input + " [나 → AI]\033[0m", true);
+				PrintChatMessage("\033[93m" + Input + " [나 → AI]\033[0m", true);   // 내 질문은 밝은 노란색
 			}
 			else // Whisper
 			{

@@ -297,7 +297,8 @@ namespace
 
 	String AiLineText(const String& Line)
 	{
-		return String("\033[35m") + (GAiFirstLine ? "[AI] " : "     ") + Line + "\033[0m";
+		// 답변 본문은 기본색(흰색). [AI] 태그만 굵게 — 자주색은 검정 배경에서 읽기 어려웠다.
+		return (GAiFirstLine ? String("\033[1m[AI]\033[0m ") : String("     ")) + Line;
 	}
 
 	// 줄 하나를 확정한다. 부분 줄이 그려져 있으면 그 행을 최종 텍스트로 덮어쓰고, 아니면 새 행에 찍는다.
