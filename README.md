@@ -48,7 +48,7 @@ C++20 으로 만든 멀티스레드 채팅 서버. 채팅이라는 가벼운 도
 
 - **언어**: C++20 (코드 생성 파이프라인은 Python)
 - **빌드**: Visual Studio (`.sln`) + vcpkg (manifest 모드)
-- **네트워크**: Boost.Asio (코루틴 + IOCP 백엔드)
+- **네트워크**: asio (독립형, 코루틴 + IOCP 백엔드)
 - **DB**: MSSQL + ODBC
 - **로깅**: spdlog
 - **직렬화**: protobuf (패킷 자동 생성 파이프라인)
@@ -252,7 +252,7 @@ Key Lookup 이 남는 이유는 SELECT 가 모든 컬럼을 읽기 때문이다.
 
 ### I/O 와 작업 분배
 
-- Boost.Asio 코루틴 기반 멀티세션 (`Acceptor` + `Session::DoRead/DoWrite`). 콜백 중첩 없이 순차 코드처럼 읽힌다.
+- asio 코루틴 기반 멀티세션 (`Acceptor` + `Session::DoRead/DoWrite`). 콜백 중첩 없이 순차 코드처럼 읽힌다.
 - `context.poll()` 을 택했다. `run()` 은 큐가 비면 스레드를 재우고 매번 커널을 부르는 비용이 누적된다. 작업량이 많은 서버 로직에서는 재우지 않고 바로 다음 작업을 잡는 쪽이 낫다.
 - 자체 `JobQueue` 로 I/O 이벤트와 비즈니스 로직을 분리. Room 하나의 작업은 한 번에 한 워커만 처리하므로 방 상태에 락이 필요 없다 (액터 모델). asio strand 대신 직접 구현해 제어권을 확보했다.
 - `SendBuffer` 3계층 (`SendBuffer` + `Chunk` + `Manager`) + TLS 캐시로 송신 경합 제거.
@@ -408,7 +408,7 @@ Handler
 ## 주요 기능
 
 ### 인프라
-- Boost.Asio 코루틴 기반 멀티세션 (`Acceptor` + `Session::DoRead/DoWrite`)
+- asio 코루틴 기반 멀티세션 (`Acceptor` + `Session::DoRead/DoWrite`)
 - 자체 `JobQueue` (Room 단위 작업 직렬화)
 - `SendBuffer` 3계층 + TLS 캐시
 - 패킷 디스패치 + protobuf 기반 핸들러 자동 생성
@@ -467,7 +467,7 @@ python Tools\LoadTest\ai_chat_test.py
 
 ## 로드맵
 
-순서대로 진행 중이다.
+계획한 항목은 전부 완료했다.
 
 0. ~~**비밀번호 해싱**~~ — 완료 (bcrypt).
 1. ~~**포인트 이체**~~ — 완료.
