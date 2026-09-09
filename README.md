@@ -135,6 +135,8 @@ return Fail("Transfer failed after retries");
 
 동시성 검증은 `Tools/LoadTest/transfer_test.py` 로 한다 (아래 [성능 측정](#성능-측정)). 회원가입 시 초기 잔고 10,000 P 를 지급한다.
 
+![마이페이지에서 demo_receiver 에게 1,500 P 이체 — 잔고 10,000 → 8,500 P](docs/images/transfer.png)
+
 ### 커넥션 풀
 
 - ODBC 환경 핸들(HENV) 은 풀이 하나만 소유하고 모든 연결이 공유한다.
@@ -208,6 +210,10 @@ struct Friendship
      |--Index Seek(OBJECT:([User].[IX_User_Nickname] AS [t0]), SEEK:([t0].[Nickname]=N'bulk5000') ORDERED FORWARD)
      |--Clustered Index Seek(OBJECT:([User].[PK__User__...] AS [t0]), SEEK:([t0].[Id]=[t0].[Id]) LOOKUP ORDERED FORWARD)
 ```
+
+![인덱스 없음 — Clustered Index Scan, 논리 읽기 147](docs/images/plan_nickname_scan.png)
+
+![인덱스 있음 — Index Seek + Key Lookup, 논리 읽기 4](docs/images/plan_nickname_seek.png)
 
 배운 것 하나. 행이 20개일 때는 인덱스가 있어도 옵티마이저가 Nickname 조회에 **Scan 을 골랐다**. 한 페이지를 훑는 비용이 인덱스를 타고 Key Lookup 으로 되돌아오는 비용보다 싸다고 판단한 것이다. 인덱스는 "있으면 쓰인다" 가 아니라 "통계상 싸면 쓰인다". 그래서 실행 계획은 실제 규모의 데이터로 봐야 한다.
 
@@ -294,6 +300,10 @@ Key Lookup 이 남는 이유는 SELECT 가 모든 컬럼을 읽기 때문이다.
                                                        │     └─ SSE text_delta 마다 ─S_AI_CHAT{text}─▶ 클라 (줄 단위로 화면에)
                                                        └─ 응답 저장 + 사용량 갱신 ─S_AI_CHAT{done}─▶ 클라
 ```
+
+![AI 모드 채팅 — 모의 서버(mock_claude_server.py) 응답. 실제 API 키 없이 echo 로 스트리밍한 화면이며, 두 번째 응답의 history 13 msgs 는 DB 에 저장된 이력이 요청에 실려 간 것](docs/images/ai_chat_mock.png)
+
+*위 화면은 API 키 없이 `Tools/LoadTest/mock_claude_server.py` 를 붙인 **모의 서버 응답** 이다. 실제 Claude 응답 화면은 키를 넣어야 찍을 수 있다.*
 
 ### 설계 결정
 
