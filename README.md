@@ -20,8 +20,7 @@ C++20 으로 만든 멀티스레드 채팅 서버. 채팅이라는 가벼운 도
 10. [주요 기능](#주요-기능)
 11. [성능 측정](#성능-측정)
 12. [로드맵](#로드맵)
-13. [알려진 한계 / 개선 여지](#알려진-한계--개선-여지)
-14. [디렉토리 구조](#디렉토리-구조)
+13. [디렉토리 구조](#디렉토리-구조)
 
 ---
 
@@ -474,27 +473,6 @@ python Tools\LoadTest\ai_chat_test.py
 2. ~~**인덱스 + 락 힌트**~~ — 완료. 실행 계획·IO 비교와 OCC vs UPDLOCK 비교까지.
 3. ~~**AI 채팅**~~ — 완료 (독립형 asio + OpenSSL 로 구현, 모의 서버 11항목 + 실제 API 스트리밍 응답 확인).
 4. ~~**부하 테스트**~~ — 완료. 이체 동시성·채팅 브로드캐스트·bcrypt 비용 측정, strand 버그 발견·수정.
-
----
-
-## 알려진 한계 / 개선 여지
-
-범위 통제상 의식적으로 보류한 항목들. 무엇이 부족한지 아는 것도 설계의 일부라고 생각한다.
-
-- **Include 의 INNER JOIN 고정**: FK NULL / 참조 삭제 시 메인 행 누락. LEFT JOIN 옵션 + projection (특정 컬럼만 SELECT) 까지 가야 운영 ORM 수준.
-- **OCC 의 전체 컬럼 비교**: 컬럼이 많아지면 버전 컬럼 방식이 유리. 트레이드오프를 알고 선택했다.
-- **스키마 마이그레이션은 추가 전용**: 컬럼 추가와 인덱스 생성만 자동. 컬럼 길이·타입 변경, 같은 이름의 인덱스 정의 변경은 감지하지 못한다 (수동 ALTER / DROP).
-- **테이블 힌트는 메인 테이블(t0) 에만**: `Include` 로 JOIN 되는 테이블에는 붙지 않는다. NOLOCK 목록 조회에서 JOIN 쪽은 일반 읽기.
-- **AI 답변 도중 다른 채팅이 끼어들면 줄이 갈라진다**: 부분 줄은 스크롤 영역 맨 아래 행을 지우고 다시 그리는 방식이라, 다른 메시지가 그 행을 밀어내면 부분 줄은 그 자리에서 확정되고 나머지는 새 행에 이어진다. 커서 열을 추적하는 방식이면 피할 수 있지만 한글 폭 계산이 늘어 택하지 않았다.
-- **세션 소켓 객체의 동시 접근**: 송신 큐는 mutex 로 보호하지만 읽기·쓰기 코루틴과 Disconnect 가 소켓 객체를 서로 다른 스레드에서 만진다. asio 의 정석은 per-session strand. 부하 테스트는 통과했지만 이론적 한계로 남긴다.
-- **AI HTTP 클라이언트는 최소 구현**: 리다이렉트·keep-alive·HTTP/2 없음. Boost.Beast 로 바꾸려면 프로젝트를 Boost.Asio 로 전환해야 한다.
-- **bcrypt 72바이트 제한**: 입력 72바이트 이후는 무시된다. 비밀번호를 64자로 제한하지만 UTF-8 다바이트면 넘을 수 있다. SHA-256 pre-hash 로 풀 수 있지만 범위 밖.
-- **부하 테스트의 지연 수치는 클라이언트 포함**: Python 클라이언트가 같은 머신에서 도는 값. 서버 단독 지연 측정은 별도 계측 필요.
-- **Key Lookup 잔존**: SELECT 가 전 컬럼을 읽어 Index Seek 뒤에 Key Lookup 이 붙는다. projection 이나 covering index 로 없앨 수 있지만 이 규모에서는 보류.
-- **ORM `BindParam`/`BindCol` switch 산재**: `DbValue`/`TypeTag` 분기가 `ToList` / `SaveChanges` / OCC 경로에 4회 중복. `DbValueBinder` 로 일원화 가능.
-- **Room JobQueue 단일화**: state 와 broadcast 가 동일 큐 → 한 워커만 처리. state queue / chat queue 분리 시 Sessions 동시 접근 대책 (RWLock or copy-on-write 스냅샷) 필요.
-- **엔티티 코드젠 수동 실행**: 패킷 생성(`GenPackets.bat`) 은 `<PreBuildEvent>` 에 묶여 있지만 엔티티 생성(`GenModels.bat`) 은 아직 수동. 같은 방식으로 묶을 여지.
-- **클라 응답 플래그 선형 누적**: 기능마다 `Atomic<bool>` 2개 (`Done`/`Success`). `Map<RequestId, ResponseState>` 기반 응답 저장소로 대체 가능.
 
 ---
 
