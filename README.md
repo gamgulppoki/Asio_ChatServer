@@ -292,12 +292,12 @@ Key Lookup 이 남는 이유는 SELECT 가 모든 컬럼을 읽기 때문이다.
 채팅방에서 `Tab` 으로 AI 모드를 고르면 입력이 Claude API 로 가고, 응답이 생성되는 대로 조각 단위로 돌아온다.
 
 ```
-클라 [AI] ─C_AI_CHAT─▶ 핸들러 ─co_spawn(세션 strand)─▶ AiChatService
+클라 [AI] ─C_AI_CHAT─▶ 핸들러 ─co_spawn(io_context)─▶ AiChatService
                                                        ├─ 한도 검사            AiUsage (유저·일 단위)
                                                        ├─ 유저 메시지 저장      AiMessage
                                                        ├─ 최근 20행 이력 로드   ORDER BY CreatedAt DESC, TOP 20
                                                        ├─ Claude::StreamMessage ─ HTTPS POST /v1/messages (stream: true)
-                                                       │     └─ SSE text_delta 마다 ─S_AI_CHAT{text}─▶ 클라 (줄 단위로 화면에)
+                                                       │     └─ SSE text_delta 마다 ─S_AI_CHAT{text}─▶ 클라 (조각마다 화면에)
                                                        └─ 응답 저장 + 사용량 갱신 ─S_AI_CHAT{done}─▶ 클라
 ```
 
@@ -487,7 +487,7 @@ python Tools\LoadTest\ai_chat_test.py
 - **OCC 의 전체 컬럼 비교**: 컬럼이 많아지면 버전 컬럼 방식이 유리. 트레이드오프를 알고 선택했다.
 - **스키마 마이그레이션은 추가 전용**: 컬럼 추가와 인덱스 생성만 자동. 컬럼 길이·타입 변경, 같은 이름의 인덱스 정의 변경은 감지하지 못한다 (수동 ALTER / DROP).
 - **테이블 힌트는 메인 테이블(t0) 에만**: `Include` 로 JOIN 되는 테이블에는 붙지 않는다. NOLOCK 목록 조회에서 JOIN 쪽은 일반 읽기.
-- **AI 콘솔 출력은 줄 단위 스트리밍**: 조각을 받는 즉시 화면에 찍지 않고 줄바꿈이나 폭 초과 시점에 내보낸다. 글자 단위로 보이려면 스크롤 영역 안 커서 위치 추적이 필요해 보류.
+- **AI 답변 도중 다른 채팅이 끼어들면 줄이 갈라진다**: 부분 줄은 스크롤 영역 맨 아래 행을 지우고 다시 그리는 방식이라, 다른 메시지가 그 행을 밀어내면 부분 줄은 그 자리에서 확정되고 나머지는 새 행에 이어진다. 커서 열을 추적하는 방식이면 피할 수 있지만 한글 폭 계산이 늘어 택하지 않았다.
 - **세션 소켓 객체의 동시 접근**: 송신 큐는 mutex 로 보호하지만 읽기·쓰기 코루틴과 Disconnect 가 소켓 객체를 서로 다른 스레드에서 만진다. asio 의 정석은 per-session strand. 부하 테스트는 통과했지만 이론적 한계로 남긴다.
 - **AI HTTP 클라이언트는 최소 구현**: 리다이렉트·keep-alive·HTTP/2 없음. Boost.Beast 로 바꾸려면 프로젝트를 Boost.Asio 로 전환해야 한다.
 - **실제 API 응답은 미검증**: 키 없이 모의 서버와 실제 엔드포인트 401 까지만 확인.

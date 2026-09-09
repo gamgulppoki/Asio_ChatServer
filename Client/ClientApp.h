@@ -37,6 +37,17 @@ extern std::wstring GChatInput;
 // ChatLoop 밖이면 정렬 무시하고 그냥 한 줄 출력.
 void PrintChatMessage(const String& Line, bool bIsMine = false);
 
+// AI 답변 줄을 스크롤 영역 맨 아래 행에 그린다.
+//   bFinal = false : "아직 안 끝난 줄". 다음 호출이 같은 행을 지우고 다시 그린다.
+//                    조각이 올 때마다 부르면 글자가 타이핑되듯 늘어난다.
+//   bFinal = true  : 그 행을 확정한다. 다음 호출은 새 행을 만든다.
+// 맨 아래 행이 AI 부분 줄이 아니면(처음이거나 다른 메시지가 끼어든 뒤) 한 줄 스크롤해 새 행을 만든다.
+// ChatLoop 밖이면 아무것도 그리지 않고 false 를 돌려준다 (호출자가 PrintChatMessage 로 대신 찍는다).
+bool DrawAiLine(const String& Line, bool bFinal);
+
+// 스크롤 영역 맨 아래 행이 지금 AI 부분 줄인지. PrintChatMessage 로 다른 메시지가 찍히면 false 가 된다.
+bool IsBottomLineAi();
+
 // 회원가입 응답 수신 상태. AuthLoop가 요청 후 대기, 수신 핸들러가 세팅.
 extern Atomic<bool> GRegisterDone;
 extern Atomic<bool> GRegisterSuccess;

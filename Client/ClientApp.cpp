@@ -44,6 +44,10 @@ String GMyNickname;
 int32  GCurrentRoomId = 0;
 String GCurrentRoomName;
 
+// 스크롤 영역 맨 아래 행이 "아직 안 끝난 AI 답변 줄" 인지. GChatMutex 보호 안에서만 읽고 쓴다.
+// DrawAiLine(bFinal=false) 가 켜고, 완성 줄이 찍히면(PrintChatMessage / DrawAiLine(bFinal=true)) 꺼진다.
+static bool GBottomLineIsAi = false;
+
 namespace
 {
 	// ChatLoop 카톡 레이아웃 행 분배 (콘솔 높이 H 기준):
@@ -107,6 +111,7 @@ namespace
 	{
 		ConsoleUI::ResetScrollRegion();
 		ConsoleUI::ClearScreen();
+		GBottomLineIsAi = false;
 	}
 
 	// 입력 줄(H-1)에 모드 태그 + 입력 버퍼를 그린다. 반드시 GChatMutex 보호 안에서만 호출.
@@ -177,6 +182,34 @@ void PrintChatMessage(const String& Line, bool bIsMine)
 	ConsoleUI::MoveCursor(ChatScrollBottomRow(), 1);
 	std::cout << "\n" << Aligned << std::flush;
 	ConsoleUI::RestoreCursor();
+	GBottomLineIsAi = false;   // 맨 아래 행은 이제 이 메시지. AI 부분 줄이 있었다면 위로 밀려 확정된 셈
+}
+
+// AI 답변 줄 그리기. 부분 줄은 "맨 아래 행을 지우고 지금까지 모인 텍스트로 다시 그린다" 방식이다.
+// 글자마다 커서 열을 계산하지 않아도 되고(한글 2칸 폭 문제 없음), 줄바꿈·폭 계산은 완성 줄과 같은 코드를 쓴다.
+bool DrawAiLine(const String& Line, bool bFinal)
+{
+	std::lock_guard<std::mutex> Lock(GChatMutex);
+
+	if (!GChatActive)
+		return false;
+
+	ConsoleUI::SaveCursor();
+	ConsoleUI::MoveCursor(ChatScrollBottomRow(), 1);
+	if (!GBottomLineIsAi)
+		std::cout << "\n";          // 스크롤 영역 안에서 한 줄 밀어 새 행 확보 (커서는 맨 아래 행에 남는다)
+	ConsoleUI::ClearLine();
+	std::cout << "  " << Line << std::flush;
+	ConsoleUI::RestoreCursor();
+
+	GBottomLineIsAi = !bFinal;
+	return true;
+}
+
+bool IsBottomLineAi()
+{
+	std::lock_guard<std::mutex> Lock(GChatMutex);
+	return GBottomLineIsAi;
 }
 
 // 전역 싱글톤 바인딩 + 패킷 핸들러 초기화

@@ -291,12 +291,22 @@ bool Handle_S_TRANSFER_RECEIVED(SharedPtr<Session> SessionPtr, Protocol::S_TRANS
 namespace
 {
 	std::mutex GAiMutex;
-	String     GAiPending;          // 아직 화면에 안 내보낸 조각
+	String     GAiPending;          // 아직 확정되지 않은 줄 (조각이 올 때마다 여기에 붙고, 화면에는 부분 줄로 그려진다)
+	bool       GAiShown = false;    // GAiPending 이 화면 맨 아래 행에 부분 줄로 그려져 있는지
 	bool       GAiFirstLine = true; // 답변의 첫 줄에만 [AI] 태그, 이후 줄은 들여쓰기
 
+	String AiLineText(const String& Line)
+	{
+		return String("\033[35m") + (GAiFirstLine ? "[AI] " : "     ") + Line + "\033[0m";
+	}
+
+	// 줄 하나를 확정한다. 부분 줄이 그려져 있으면 그 행을 최종 텍스트로 덮어쓰고, 아니면 새 행에 찍는다.
 	void FlushAiLine(const String& Line)
 	{
-		PrintChatMessage(String("\033[35m") + (GAiFirstLine ? "[AI] " : "     ") + Line + "\033[0m", false);
+		const String Text = AiLineText(Line);
+		if (!DrawAiLine(Text, true))
+			PrintChatMessage(Text, false);   // ChatLoop 밖
+		GAiShown     = false;
 		GAiFirstLine = false;
 	}
 
@@ -315,12 +325,22 @@ namespace
 	}
 }
 
-// 서버가 API 의 텍스트 조각을 받는 대로 보내준다. 콘솔은 줄 단위로 그리므로
-// 줄바꿈이 오거나 한 줄 폭을 넘을 때마다 내보낸다 (글자 단위 커서 제어 없이도 "타이핑되듯" 보인다).
+// 서버가 API 의 텍스트 조각을 받는 대로 보내준다. 조각이 올 때마다:
+//   1) 줄바꿈이 있거나 한 줄 폭을 넘으면 그 부분은 완성 줄로 확정하고
+//   2) 남은 부분 줄은 맨 아래 행에 즉시 다시 그린다 → 글자가 타이핑되듯 늘어난다.
 bool Handle_S_AI_CHAT(SharedPtr<Session> SessionPtr, Protocol::S_AI_CHAT& Pkt)
 {
 	std::lock_guard<std::mutex> Lock(GAiMutex);
 	const int32 iMaxWidth = std::max(30, ConsoleUI::GetSize().Width - 12);
+
+	// 부분 줄을 그려 둔 사이에 다른 메시지가 끼어들었으면 그 줄은 이미 위로 밀려 확정된 셈이다.
+	// 화면에 나간 텍스트는 버리고 다음 조각부터 새 행에 이어 쓴다 (문장이 두 줄로 갈라질 수 있다).
+	if (GAiShown && !IsBottomLineAi())
+	{
+		GAiPending.clear();
+		GAiShown     = false;
+		GAiFirstLine = false;
+	}
 
 	GAiPending += Pkt.text();
 
@@ -336,13 +356,17 @@ bool Handle_S_AI_CHAT(SharedPtr<Session> SessionPtr, Protocol::S_AI_CHAT& Pkt)
 	if (Pkt.done())
 	{
 		if (!GAiPending.empty())
-		{
 			FlushAiLine(GAiPending);
-			GAiPending.clear();
-		}
+		GAiPending.clear();
+		GAiShown = false;
 		if (!Pkt.success())
 			PrintChatMessage("\033[31m[AI] 오류: " + Pkt.error_msg() + "\033[0m", false);
 		GAiFirstLine = true;
+		return true;
 	}
+
+	// 아직 안 끝난 줄을 지금 상태로 다시 그린다
+	if (!GAiPending.empty())
+		GAiShown = DrawAiLine(AiLineText(GAiPending), false);
 	return true;
 }
