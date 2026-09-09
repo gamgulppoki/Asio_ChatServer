@@ -301,9 +301,7 @@ Key Lookup 이 남는 이유는 SELECT 가 모든 컬럼을 읽기 때문이다.
                                                        └─ 응답 저장 + 사용량 갱신 ─S_AI_CHAT{done}─▶ 클라
 ```
 
-![AI 모드 채팅 — 모의 서버(mock_claude_server.py) 응답. 실제 API 키 없이 echo 로 스트리밍한 화면이며, 두 번째 응답의 history 13 msgs 는 DB 에 저장된 이력이 요청에 실려 간 것](docs/images/ai_chat_mock.png)
-
-*위 화면은 API 키 없이 `Tools/LoadTest/mock_claude_server.py` 를 붙인 **모의 서버 응답** 이다. 실제 Claude 응답 화면은 키를 넣어야 찍을 수 있다.*
+![AI 모드 채팅 — 실제 Claude API 응답. 두 번째 질문 "그럼 체결이랑 결제는 뭐가 달라?" 는 앞 대화가 이력으로 함께 실려 문맥이 이어진다](docs/images/ai_chat.png)
 
 ### 설계 결정
 
@@ -322,7 +320,7 @@ Key Lookup 이 남는 이유는 SELECT 가 모든 컬럼을 읽기 때문이다.
 
 - **모의 서버** `Tools/LoadTest/mock_claude_server.py`: 실제 API 와 같은 SSE 이벤트를 chunked 로 흘린다. 429/500 한 번 실패, refusal, 스트림 도중 error, 느린 응답 시나리오.
 - **통합 테스트** `Tools/LoadTest/ai_chat_test.py` 11개 항목 전부 통과: 조각 스트리밍, 이력 3건 전송, 429·500 재시도 후 성공, refusal, 스트림 오류, 진행 중 중복 요청 거절, 일일 한도, DB 저장, 사용량 집계.
-- **실제 엔드포인트 TLS**: 더미 키로 `api.anthropic.com` 에 붙여 `HTTP 401: API key is invalid.` 를 받았다. TLS 핸드셰이크·인증서 검증·SNI·응답 파싱이 실제 서버에서 동작한다는 뜻이다. 실제 응답 스트리밍은 유효한 키를 넣어야 확인된다.
+- **실제 엔드포인트**: 더미 키로는 `HTTP 401: API key is invalid.` (TLS·인증서·SNI·파싱이 실제 서버에서 동작), 유효한 키로는 위 캡처처럼 스트리밍 응답을 받았다. 첫 조각까지 약 1.5초, 완료까지 약 3초 (입력 168 / 출력 76 토큰, effort=low).
 
 ### 환경 변수
 
@@ -474,7 +472,7 @@ python Tools\LoadTest\ai_chat_test.py
 0. ~~**비밀번호 해싱**~~ — 완료 (bcrypt).
 1. ~~**포인트 이체**~~ — 완료.
 2. ~~**인덱스 + 락 힌트**~~ — 완료. 실행 계획·IO 비교와 OCC vs UPDLOCK 비교까지.
-3. ~~**AI 채팅**~~ — 완료 (독립형 asio + OpenSSL 로 구현, 모의 서버·실제 엔드포인트 TLS 검증). 실제 응답 스트리밍 확인은 API 키 필요.
+3. ~~**AI 채팅**~~ — 완료 (독립형 asio + OpenSSL 로 구현, 모의 서버 11항목 + 실제 API 스트리밍 응답 확인).
 4. ~~**부하 테스트**~~ — 완료. 이체 동시성·채팅 브로드캐스트·bcrypt 비용 측정, strand 버그 발견·수정.
 
 ---
@@ -490,7 +488,6 @@ python Tools\LoadTest\ai_chat_test.py
 - **AI 답변 도중 다른 채팅이 끼어들면 줄이 갈라진다**: 부분 줄은 스크롤 영역 맨 아래 행을 지우고 다시 그리는 방식이라, 다른 메시지가 그 행을 밀어내면 부분 줄은 그 자리에서 확정되고 나머지는 새 행에 이어진다. 커서 열을 추적하는 방식이면 피할 수 있지만 한글 폭 계산이 늘어 택하지 않았다.
 - **세션 소켓 객체의 동시 접근**: 송신 큐는 mutex 로 보호하지만 읽기·쓰기 코루틴과 Disconnect 가 소켓 객체를 서로 다른 스레드에서 만진다. asio 의 정석은 per-session strand. 부하 테스트는 통과했지만 이론적 한계로 남긴다.
 - **AI HTTP 클라이언트는 최소 구현**: 리다이렉트·keep-alive·HTTP/2 없음. Boost.Beast 로 바꾸려면 프로젝트를 Boost.Asio 로 전환해야 한다.
-- **실제 API 응답은 미검증**: 키 없이 모의 서버와 실제 엔드포인트 401 까지만 확인.
 - **bcrypt 72바이트 제한**: 입력 72바이트 이후는 무시된다. 비밀번호를 64자로 제한하지만 UTF-8 다바이트면 넘을 수 있다. SHA-256 pre-hash 로 풀 수 있지만 범위 밖.
 - **부하 테스트의 지연 수치는 클라이언트 포함**: Python 클라이언트가 같은 머신에서 도는 값. 서버 단독 지연 측정은 별도 계측 필요.
 - **Key Lookup 잔존**: SELECT 가 전 컬럼을 읽어 Index Seek 뒤에 Key Lookup 이 붙는다. projection 이나 covering index 로 없앨 수 있지만 이 규모에서는 보류.
