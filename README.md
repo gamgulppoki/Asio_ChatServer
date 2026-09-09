@@ -262,18 +262,19 @@ Key Lookup 이 남는 이유는 SELECT 가 모든 컬럼을 읽기 때문이다.
 | JobQueue | `std::mutex` | 위와 동일 |
 | RoomManager | `std::shared_mutex` | read-heavy (FindRoom / GetRoomList / 확성기 iterate) |
 | SessionManager | `std::shared_mutex` | read-heavy (IsOnline / GetSession), Register/Unregister 만 write |
-| Session 소켓 I/O | per-session asio strand | DoRead / DoWrite / Send 의 post 가 전부 한 strand 위에서만 돈다. 아래 "부하 테스트가 잡은 버그" 참고 |
+| Session 송신 큐 | `std::mutex` (짧은 임계영역) | `Send()` 는 아무 스레드에서나 불리고 `DoWrite` 코루틴도 아무 워커에서나 돈다. 큐와 "쓰는 중" 플래그를 락 안에서만 만진다. 아래 "부하 테스트가 잡은 버그" 참고 |
 | TLS | `LThreadId`, `LSendBufferChunk` | 스레드별 독립 자원, 경합 제거 |
 | ORM 동시성 | 요청당 `DBContext` 격리 + Pool 의 conn 한 스레드 전유 | 자료구조에 mutex 얹는 대신 공유 자체를 구조적으로 제거 |
 
-### 부하 테스트가 잡은 버그 — 문서에만 있던 strand
+### 부하 테스트가 잡은 버그 — 보호 없이 공유되던 송신 큐
 
-이 표의 "Session 소켓 I/O: asio strand" 는 부하 테스트 전까지 **문서에만 있고 코드에는 없었다.** 소켓 executor 가 io_context 그 자체였고, `Send()` 가 그 executor 로 post 한 핸들러와 `DoWrite` 코루틴이 워커 24개 중 아무 스레드에서나 돌면서 `WriteQueue` 를 동시에 만졌다.
+이 표의 원래 버전에는 "Session 소켓 I/O: asio strand" 라고 적혀 있었지만, 코드에는 strand 도 락도 없었다. 소켓 executor 가 io_context 그 자체였고, `Send()` 가 post 한 핸들러와 `DoWrite` 코루틴이 워커 24개 중 아무 스레드에서나 돌면서 `WriteQueue` 와 `bIsWriting` 을 동시에 만졌다.
 
 - **증상**: 50명 방에서 브로드캐스트 부하를 주자 `Write error: 잘못된 포인터 주소` (WSAEFAULT) 와 메시지 유실 5건. 같은 테스트를 다시 돌리자 서버 크래시.
-- **진단**: 유실 패턴을 (수신자, 송신자, 순번) 으로 찍어 보니 특정 세션에 몰림 → 세션 단위 자료구조 경합. 코드를 보니 strand 가 없었다.
-- **수정**: `Session` 에 `asio::strand` 를 두고 `DoRead` / `DoWrite` / `Send` 의 post / `Disconnect` 를 전부 그 위에서 실행. 쓰기 오류가 나면 조용히 큐를 버리지 않고 `Disconnect` 해서 정리 경로로 보낸다.
-- **검증**: 같은 부하 50명 3회 + 100명 1회, 유실 0 · 쓰기 오류 0 · 서버 생존.
+- **진단**: 유실 패턴을 (수신자, 송신자, 순번) 으로 찍어 보니 특정 세션에 몰림 → 세션 단위 자료구조 경합. 코드를 보니 큐를 보호하는 것이 아무것도 없었다.
+- **수정**: 송신 큐와 "쓰는 중" 플래그를 `std::mutex` 로 보호한다. `Send()` 는 락 안에서 push 하고 플래그를 세운 뒤 락 밖에서 `DoWrite` 를 띄운다. `DoWrite` 는 락 안에서 하나 꺼내고 락을 놓은 뒤 `async_write` 를 기다린다 (I/O 대기 중에는 락을 잡지 않는다). "큐가 비었다" 와 "플래그 해제" 는 같은 락 안에서 처리해 그 사이 들어온 `Send` 가 새 `DoWrite` 를 띄울지 정확히 판단한다. 쓰기 오류가 나면 큐를 비우고 `Disconnect` 해서 정리 경로로 보낸다.
+- **왜 strand 가 아니라 mutex 인가**: asio 가 권하는 정석은 세션마다 strand 를 두고 모든 핸들러를 그 위에서 도는 것이다. 그 방식도 구현해 같은 부하를 통과시켰지만, 이 프로젝트의 다른 자원(JobQueue, SendBufferManager) 과 같은 도구인 "짧은 임계영역의 mutex" 로 통일했다. 남는 한계: 소켓 객체 자체는 여전히 여러 스레드가 만진다 (읽기 코루틴과 쓰기 코루틴, `Disconnect`). asio 문서상 완전한 답은 strand 이며, 이 트레이드오프를 알고 선택했다.
+- **검증**: 같은 부하 50명 3회 + 100명 2회 (초당 10건 / 30건), 유실 0 · 쓰기 오류 0 · 서버 생존. 100명 30건/s 에서 300,000건 전달, 약 170,000 deliveries/s.
 
 소규모 수동 테스트로는 몇 달 동안 드러나지 않던 경합이 자동 부하 테스트 첫 실행에서 나왔다. "동시성 버그는 테스트가 아니라 부하가 찾는다" 는 걸 몸으로 배운 사례.
 
@@ -431,7 +432,8 @@ Handler
 | 인덱스 효과 | 유저 10,020행, Nickname / Email 단건 조회 | 논리 읽기 **147 → 4**, Clustered Index Scan → Index Seek |
 | 이체 처리량 | 위 시나리오 | 0.6 s, 약 140~150 transfers/s (클라 9 스레드 직렬 요청 기준이라 서버 상한이 아님) |
 | 채팅 브로드캐스트 (50명) | 방 1개, 50명이 각 초당 10건 × 20건 = 1,000건 송신 → 50,000건 전달 (3회 반복) | 유실 **0**, 약 22,500 deliveries/s, 지연 p50 19~22 ms · p99 32~35 ms |
-| 채팅 브로드캐스트 (100명) | 100명, 2,000건 송신 → 200,000건 전달 | 유실 **0**, 약 87,000 deliveries/s, 지연 p50 21 ms · p95 53 ms · p99 67 ms |
+| 채팅 브로드캐스트 (100명) | 100명, 각 초당 10건 × 20건 = 2,000건 송신 → 200,000건 전달 | 유실 **0**, 약 88,000 deliveries/s, 지연 p50 28 ms · p95 48 ms · p99 56 ms |
+| 채팅 브로드캐스트 (100명, 강한 부하) | 100명, 각 초당 30건 × 30건 = 3,000건 송신 → 300,000건 전달 | 유실 **0**, 약 172,000 deliveries/s, 지연 p50 28 ms · p95 52 ms · p99 63 ms |
 | bcrypt | cost 12, 가입(해시 1회) / 로그인(검증 1회) 왕복 | 각 ≈ 250 ms. 100명 병렬 가입은 16 스레드로 7.0 s |
 
 허브 계좌 하나에 9개 요청이 몰리는 극단적 경합에서 OCC 실패율 10~15% 는 낙관적 방식의 한계를 그대로 보여준다. 재시도가 아니라 대기가 필요한 자리이고, 같은 코드에 `UPDLOCK` 을 켜면 실패가 0 이 된다.
@@ -474,6 +476,7 @@ python Tools\LoadTesti_chat_test.py
 - **스키마 마이그레이션은 추가 전용**: 컬럼 추가와 인덱스 생성만 자동. 컬럼 길이·타입 변경, 같은 이름의 인덱스 정의 변경은 감지하지 못한다 (수동 ALTER / DROP).
 - **테이블 힌트는 메인 테이블(t0) 에만**: `Include` 로 JOIN 되는 테이블에는 붙지 않는다. NOLOCK 목록 조회에서 JOIN 쪽은 일반 읽기.
 - **AI 콘솔 출력은 줄 단위 스트리밍**: 조각을 받는 즉시 화면에 찍지 않고 줄바꿈이나 폭 초과 시점에 내보낸다. 글자 단위로 보이려면 스크롤 영역 안 커서 위치 추적이 필요해 보류.
+- **세션 소켓 객체의 동시 접근**: 송신 큐는 mutex 로 보호하지만 읽기·쓰기 코루틴과 Disconnect 가 소켓 객체를 서로 다른 스레드에서 만진다. asio 의 정석은 per-session strand. 부하 테스트는 통과했지만 이론적 한계로 남긴다.
 - **AI HTTP 클라이언트는 최소 구현**: 리다이렉트·keep-alive·HTTP/2 없음. Boost.Beast 로 바꾸려면 프로젝트를 Boost.Asio 로 전환해야 한다.
 - **실제 API 응답은 미검증**: 키 없이 모의 서버와 실제 엔드포인트 401 까지만 확인.
 - **bcrypt 72바이트 제한**: 입력 72바이트 이후는 무시된다. 비밀번호를 64자로 제한하지만 UTF-8 다바이트면 넘을 수 있다. SHA-256 pre-hash 로 풀 수 있지만 범위 밖.
@@ -491,7 +494,7 @@ python Tools\LoadTesti_chat_test.py
 
 ```
 ChatServer/
-├── ServerCore/         # 인프라 (Lock, JobQueue, Session+strand, SendBuffer, ThreadManager)
+├── ServerCore/         # 인프라 (Lock, JobQueue, Session, SendBuffer, ThreadManager)
 │   └── ThirdParty/bcrypt/  # Openwall crypt_blowfish (vendoring, 공개 도메인)
 ├── Server/
 │   ├── Network/        # Listener, ClientPacketHandler, Room, RoomManager, SessionManager

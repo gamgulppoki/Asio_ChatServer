@@ -4,9 +4,7 @@
 
 // 소켓 소유권을 이동 받고 RecvBuffer를 초기화한다.
 Session::Session(TcpSocket Socket)
-	: Socket(std::move(Socket))
-	, SessionStrand(asio::make_strand(this->Socket.get_executor()))
-	, RecvBuf(4096)
+	: Socket(std::move(Socket)), RecvBuf(4096)
 {
 }
 
@@ -14,7 +12,7 @@ Session::Session(TcpSocket Socket)
 void Session::Start()
 {
 	OnConnected();
-	asio::co_spawn(SessionStrand, DoRead(), asio::detached);
+	asio::co_spawn(Socket.get_executor(), DoRead(), asio::detached);
 }
 
 // 소켓에서 비동기로 데이터를 읽고, 완성된 패킷을 OnReceived로 전달한다.
@@ -60,16 +58,28 @@ asio::awaitable<void> Session::DoRead()
 }
 
 // 쓰기 큐의 SendBuffer 를 순서대로 전송한다. 큐가 비면 코루틴이 종료된다.
+// 큐 접근은 WriteMutex 로 보호하고, 락은 async_write 를 기다리는 동안 잡지 않는다 (임계영역 짧게).
 asio::awaitable<void> Session::DoWrite()
 {
 	auto Self = shared_from_this();
 
 	try
 	{
-		while (!WriteQueue.empty())
+		while (true)
 		{
-			SendBufferRef Buffer = WriteQueue.front();
-			WriteQueue.pop();
+			SendBufferRef Buffer;
+			{
+				std::lock_guard<std::mutex> Lock(WriteMutex);
+				if (WriteQueue.empty())
+				{
+					// "큐가 비었다" 와 "쓰는 중 해제" 를 같은 락 안에서 처리해야
+					// 그 사이에 들어온 Send 가 새 DoWrite 를 띄울지 정확히 판단할 수 있다.
+					bIsWriting = false;
+					co_return;
+				}
+				Buffer = WriteQueue.front();
+				WriteQueue.pop();
+			}
 
 			co_await asio::async_write(
 				Socket, asio::buffer(Buffer->Data(), Buffer->WriteSize()),
@@ -78,44 +88,40 @@ asio::awaitable<void> Session::DoWrite()
 	}
 	catch (std::exception& Exception)
 	{
-		// 쓰기 실패 = 소켓이 더 이상 신뢰할 수 없는 상태. 조용히 큐만 버리지 말고 끊어서
+		// 쓰기 실패 = 소켓이 더 이상 신뢰할 수 없는 상태. 큐를 비우고 끊어서
 		// DoRead 쪽 예외 → OnDisconnected 로 정리가 흘러가게 한다.
+		{
+			std::lock_guard<std::mutex> Lock(WriteMutex);
+			Queue<SendBufferRef>().swap(WriteQueue);
+			bIsWriting = false;
+		}
 		spdlog::error("Write error: {}", Exception.what());
 		Disconnect();
 	}
-
-	bIsWriting = false;
 }
 
 // SendBuffer 를 쓰기 큐에 넣는다. DoWrite 가 실행 중이 아니면 새로 spawn 한다.
-// 어느 스레드(핸들러, Room JobQueue 워커)에서 불려도 strand 로 post 하므로
-// WriteQueue / bIsWriting 은 항상 한 스레드씩만 만진다.
+// 어느 스레드(핸들러, Room JobQueue 워커, AI 코루틴)에서 불려도 큐는 WriteMutex 로 보호된다.
 void Session::Send(SendBufferRef Buffer)
 {
-	asio::post(SessionStrand, [Self = shared_from_this(), Buffer]()
+	bool bStartWriter = false;
 	{
-		Self->WriteQueue.push(Buffer);
-		if (!Self->bIsWriting)
+		std::lock_guard<std::mutex> Lock(WriteMutex);
+		WriteQueue.push(std::move(Buffer));
+		if (!bIsWriting)
 		{
-			Self->bIsWriting = true;
-			asio::co_spawn(Self->SessionStrand, Self->DoWrite(), asio::detached);
+			bIsWriting = true;   // 플래그를 락 안에서 세워야 두 Send 가 DoWrite 를 두 번 띄우지 않는다
+			bStartWriter = true;
 		}
-	});
+	}
+
+	if (bStartWriter)
+		asio::co_spawn(Socket.get_executor(), DoWrite(), asio::detached);
 }
 
 // 소켓을 닫는다. 진행 중이던 비동기 연산들은 예외로 풀려 OnDisconnected 까지 흘러간다.
 void Session::Disconnect()
 {
-	// 소켓 close 도 strand 위에서. 이미 strand 안이면 바로, 밖(서버 종료 등)이면 post.
-	if (SessionStrand.running_in_this_thread())
-	{
-		ErrorCode Error;
-		Socket.close(Error);
-		return;
-	}
-	asio::post(SessionStrand, [Self = shared_from_this()]()
-	{
-		ErrorCode Error;
-		Self->Socket.close(Error);
-	});
+	ErrorCode Error;
+	Socket.close(Error);
 }
