@@ -45,6 +45,9 @@
     <ClCompile Include="Network\ClientPacketHandler.cpp">
       <Filter>Source Files\Network</Filter>
     </ClCompile>
+    <ClCompile Include="Network\HandlerPrelude.cpp">
+      <Filter>Source Files\Network</Filter>
+    </ClCompile>
     <ClCompile Include="Network\Protocol.pb.cc">
       <Filter>Source Files\Network</Filter>
     </ClCompile>
@@ -69,6 +72,9 @@
       <Filter>Header Files\Network</Filter>
     </ClInclude>
     <ClInclude Include="Network\ClientPacketHandler.h">
+      <Filter>Header Files\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\HandlerPrelude.h">
       <Filter>Header Files\Network</Filter>
     </ClInclude>
     <ClInclude Include="Network\Protocol.pb.h">

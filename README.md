@@ -111,6 +111,7 @@ SaveChanges()
 ### 포인트 이체 — 한 트랜잭션에 두 행
 
 원장의 가장 기본적인 동작을 축소한 시나리오. `Handle_C_TRANSFER` (`Server/Network/ClientPacketHandler.cpp`).
+로그인이 필요한 나머지 DB 핸들러(친구·마이페이지·잔고)는 "로그인 확인 → 커넥션 대여 → DBContext → 조회" 도입부를 `HandlerPrelude` (`Server/Network/HandlerPrelude.h`) 한 곳에 두고, 응답 패킷만 핸들러가 채운다. 회귀 확인은 `Tools/LoadTest/friend_test.py` (35개 항목).
 
 ```
 for (retry = 0; retry <= kMaxTransferRetry; ++retry)     // 상한 3회
@@ -444,13 +445,14 @@ Handler
 
 ```
 x64\Debug\Server.exe
-python Tools\LoadTest	ransfer_test.py --users 10 --rounds 5 --amount 100
+python Tools\LoadTest\transfer_test.py --users 10 --rounds 5 --amount 100
 python Tools\LoadTest\chat_load_test.py --users 100 --msgs 20 --rate 10
-python Tools\LoadTestcrypt_test.py
+python Tools\LoadTest\bcrypt_test.py
+python Tools\LoadTest\friend_test.py
 
 # AI (키 없이): 모의 서버 띄우고, 서버를 ANTHROPIC_BASE_URL=http://127.0.0.1:8765 ANTHROPIC_API_KEY=test-key CHATSERVER_AI_DAILY_CALLS=6 로 실행
 python Tools\LoadTest\mock_claude_server.py
-python Tools\LoadTesti_chat_test.py
+python Tools\LoadTest\ai_chat_test.py
 ```
 
 ---
@@ -484,7 +486,6 @@ python Tools\LoadTesti_chat_test.py
 - **Key Lookup 잔존**: SELECT 가 전 컬럼을 읽어 Index Seek 뒤에 Key Lookup 이 붙는다. projection 이나 covering index 로 없앨 수 있지만 이 규모에서는 보류.
 - **ORM `BindParam`/`BindCol` switch 산재**: `DbValue`/`TypeTag` 분기가 `ToList` / `SaveChanges` / OCC 경로에 4회 중복. `DbValueBinder` 로 일원화 가능.
 - **Room JobQueue 단일화**: state 와 broadcast 가 동일 큐 → 한 워커만 처리. state queue / chat queue 분리 시 Sessions 동시 접근 대책 (RWLock or copy-on-write 스냅샷) 필요.
-- **핸들러 검증 중복**: 친구/마이페이지 핸들러들이 "이메일 검증 → 로그인 체크 → DB Scope → 조회" 패턴을 반복. `HandlerPrelude` 로 추출 가능.
 - **엔티티 코드젠 수동 실행**: 패킷 생성(`GenPackets.bat`) 은 `<PreBuildEvent>` 에 묶여 있지만 엔티티 생성(`GenModels.bat`) 은 아직 수동. 같은 방식으로 묶을 여지.
 - **클라 응답 플래그 선형 누적**: 기능마다 `Atomic<bool>` 2개 (`Done`/`Success`). `Map<RequestId, ResponseState>` 기반 응답 저장소로 대체 가능.
 
@@ -497,7 +498,7 @@ ChatServer/
 ├── ServerCore/         # 인프라 (Lock, JobQueue, Session, SendBuffer, ThreadManager)
 │   └── ThirdParty/bcrypt/  # Openwall crypt_blowfish (vendoring, 공개 도메인)
 ├── Server/
-│   ├── Network/        # Listener, ClientPacketHandler, Room, RoomManager, SessionManager
+│   ├── Network/        # Listener, ClientPacketHandler, HandlerPrelude, Room, RoomManager, SessionManager
 │   ├── DB/
 │   │   ├── ORM/        # 9-layer ORM (DBConnection, Property, Meta, DBContext, Sql, Navigation 등)
 │   │   ├── Entities/   # 도메인 엔티티 (User, Friendship 등) + DB_ENTITY 마커
@@ -509,5 +510,5 @@ ChatServer/
 └── Tools/
     ├── PacketGenerator/    # *.proto → C++ 패킷 핸들러 자동 생성
     ├── EntityGenerator/    # Entities/*.h → EntitiesGenerated.h + CREATE TABLE SQL
-    └── LoadTest/           # 프로토콜 직접 구현 Python 클라이언트 + 이체 동시성 · 채팅 부하 · bcrypt · AI(모의 서버) 테스트
+    └── LoadTest/           # 프로토콜 직접 구현 Python 클라이언트 + 이체 동시성 · 채팅 부하 · bcrypt · 친구/마이페이지 · AI(모의 서버) 테스트
 ```

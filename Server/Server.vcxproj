@@ -181,6 +181,7 @@
     <ClInclude Include="Network\Room.h" />
     <ClInclude Include="Network\RoomManager.h" />
     <ClInclude Include="Network\ClientPacketHandler.h" />
+    <ClInclude Include="Network\HandlerPrelude.h" />
     <ClInclude Include="Network\Protocol.pb.h" />
     <ClInclude Include="DB\DBConnectionPool.h" />
     <ClInclude Include="DB\ORM\Attributes.h" />
@@ -215,6 +216,7 @@
     <ClCompile Include="Network\Room.cpp" />
     <ClCompile Include="Network\RoomManager.cpp" />
     <ClCompile Include="Network\ClientPacketHandler.cpp" />
+    <ClCompile Include="Network\HandlerPrelude.cpp" />
     <ClCompile Include="Network\Protocol.pb.cc" />
     <ClCompile Include="DB\DBConnectionPool.cpp" />
     <ClCompile Include="DB\ORM\DBConnection.cpp" />
