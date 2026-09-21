@@ -22,7 +22,7 @@ struct User
     INDEX  LEN(60)  Property<std::string> Nickname;   // 귓속말 · 친구 요청 · 이체 대상 조회
     LEN(256)        Property<std::string> Password;   // 해시 도입 시 encoded 문자열 길이 여유
 
-    // 포인트 잔고. 이체 기능의 원장 컬럼.
+    // 포인트 잔고. 이체 기능이 갱신하는 컬럼.
     // 갱신은 반드시 DBContext 트랜잭션 + OCC(또는 UPDLOCK) 를 거친다 (Handle_C_TRANSFER 참고).
     Property<int64>                       Balance;
 };

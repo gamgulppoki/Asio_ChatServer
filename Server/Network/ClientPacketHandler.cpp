@@ -834,7 +834,7 @@ bool Handle_C_GET_BALANCE(SharedPtr<Session> SessionPtr, Protocol::C_GET_BALANCE
 	return true;
 }
 
-// 포인트 이체. 원장의 기본 동작을 축소한 시나리오:
+// 포인트 이체. 잔고가 걸린 기본 트랜잭션 시나리오:
 //   두 계좌를 읽고 → 잔고를 검증하고 → 두 행을 한 트랜잭션에서 갱신한다.
 //
 // 동시성 (GetTransferLockMode 로 선택):

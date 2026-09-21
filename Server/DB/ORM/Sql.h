@@ -82,7 +82,7 @@ inline std::string default_literal(TypeTag tag)
 
 // 스키마 마이그레이션 (추가 전용).
 // 엔티티에 필드가 추가됐는데 테이블에는 컬럼이 없으면 ALTER TABLE ADD 로 채운다.
-// 데이터를 보존해야 하는 원장 테이블에서 "테이블 드롭 후 재생성" 은 선택지가 아니기 때문.
+// 잔고처럼 데이터를 보존해야 하는 테이블에서 "테이블 드롭 후 재생성" 은 선택지가 아니기 때문.
 // 컬럼 삭제/타입 변경은 다루지 않는다 (데이터 손실 위험이 있어 자동화 대상에서 제외).
 inline std::vector<std::string> add_missing_columns_sql(const EntityMeta& meta)
 {
